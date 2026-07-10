@@ -67,6 +67,7 @@ export interface Grid {
 // and runs whatever effects the data hangs off them.
 
 export type TriggerType =
+  | 'on_gain' // fires once, for a single ability, the moment a unit learns it
   | 'on_kill'
   | 'on_move'
   | 'on_turn_start'

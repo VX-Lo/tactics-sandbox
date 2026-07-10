@@ -1,0 +1,80 @@
+[
+  {
+    "id": "sakura",
+    "name": "Sakura",
+    "glyph": "S",
+    "faction": "player",
+    "_note": "Ranger. Strikes at range 2 and cannot be countered by melee — but folds if reached.",
+    "stats": { "maxHp": 20, "atk": 8, "def": 3, "spd": 9, "skl": 9 },
+    "movement": { "points": 5 },
+    "attack": { "minRange": 2, "maxRange": 2, "hit": 90, "crit": 5 },
+    "abilities": ["evolve_on_kill"]
+  },
+  {
+    "id": "hana",
+    "name": "Hana",
+    "glyph": "H",
+    "faction": "player",
+    "_note": "Duelist. Fast and precise; doubles most foes and crits often, especially from high ground.",
+    "stats": { "maxHp": 22, "atk": 9, "def": 4, "spd": 10, "skl": 10 },
+    "movement": { "points": 5 },
+    "attack": { "minRange": 1, "maxRange": 1, "hit": 92, "crit": 12 },
+    "abilities": ["evolve_on_kill"]
+  },
+  {
+    "id": "yuki",
+    "name": "Yuki",
+    "glyph": "Y",
+    "faction": "player",
+    "_note": "Guardian. Slow but nearly unkillable up front; anchors a line so the others flank.",
+    "stats": { "maxHp": 28, "atk": 9, "def": 7, "spd": 4, "skl": 6 },
+    "movement": { "points": 4 },
+    "attack": { "minRange": 1, "maxRange": 1, "hit": 88, "crit": 3 },
+    "abilities": ["evolve_on_kill"]
+  },
+  {
+    "id": "aoi",
+    "name": "Aoi",
+    "glyph": "A",
+    "faction": "player",
+    "_note": "Scout. Long reach across the map to seize hills and finish the wounded.",
+    "stats": { "maxHp": 22, "atk": 8, "def": 4, "spd": 8, "skl": 8 },
+    "movement": { "points": 7 },
+    "attack": { "minRange": 1, "maxRange": 1, "hit": 90, "crit": 6 },
+    "abilities": ["evolve_on_kill"]
+  },
+
+  {
+    "id": "skeleton",
+    "name": "Skeleton",
+    "glyph": "z",
+    "faction": "enemy",
+    "_note": "Fodder. Slow, weak, numerous. The horde does not learn.",
+    "stats": { "maxHp": 20, "atk": 7, "def": 3, "spd": 5, "skl": 5 },
+    "movement": { "points": 4 },
+    "attack": { "minRange": 1, "maxRange": 1, "hit": 80, "crit": 2 },
+    "abilities": []
+  },
+  {
+    "id": "ghoul",
+    "name": "Ghoul",
+    "glyph": "g",
+    "faction": "enemy",
+    "_note": "Fast melee. Punishes exposed backline units.",
+    "stats": { "maxHp": 24, "atk": 9, "def": 3, "spd": 7, "skl": 6 },
+    "movement": { "points": 5 },
+    "attack": { "minRange": 1, "maxRange": 1, "hit": 82, "crit": 4 },
+    "abilities": []
+  },
+  {
+    "id": "wight",
+    "name": "Wight",
+    "glyph": "w",
+    "faction": "enemy",
+    "_note": "The horde's captain. Hits hard at range 1-2; the one enemy worth fearing.",
+    "stats": { "maxHp": 26, "atk": 10, "def": 5, "spd": 6, "skl": 8 },
+    "movement": { "points": 4 },
+    "attack": { "minRange": 1, "maxRange": 2, "hit": 85, "crit": 5 },
+    "abilities": []
+  }
+]

@@ -1,0 +1,39 @@
+[
+  {
+    "id": "plain",
+    "name": "Plain",
+    "color": "#7fae5f",
+    "moveCost": 1,
+    "defBonus": 0,
+    "avoidBonus": 0,
+    "passable": true
+  },
+  {
+    "id": "forest",
+    "name": "Forest",
+    "_note": "The elves' home ground: slows movement but shields defenders. Their whole edge is fighting from the trees.",
+    "color": "#2f6b3a",
+    "moveCost": 2,
+    "defBonus": 1,
+    "avoidBonus": 20,
+    "passable": true
+  },
+  {
+    "id": "water",
+    "name": "Water",
+    "color": "#3d6fb4",
+    "moveCost": 99,
+    "defBonus": 0,
+    "avoidBonus": 0,
+    "passable": false
+  },
+  {
+    "id": "wall",
+    "name": "Crag",
+    "color": "#6b6560",
+    "moveCost": 99,
+    "defBonus": 0,
+    "avoidBonus": 0,
+    "passable": false
+  }
+]

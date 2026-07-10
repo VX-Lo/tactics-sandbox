@@ -1,0 +1,64 @@
+[
+  {
+    "id": "evolve_on_kill",
+    "name": "Blossoming",
+    "description": "On any kill, learn a new ability and take a new name. The prototype's one evolution trigger.",
+    "trigger": "on_kill",
+    "effects": [
+      {
+        "type": "grant_random_ability",
+        "_note": "Draws one ability not already held. Its on_gain effects fire immediately, so a stat boost lands this instant.",
+        "pool": ["swift_step", "keen_arm", "ironbark", "vengeful_bloom", "forest_ward"]
+      },
+      {
+        "type": "append_epithet",
+        "pool": [
+          "the Bloodied",
+          "Kin-Avenger",
+          "Thornheart",
+          "the Unbowed",
+          "Dawnblade",
+          "Grave-Warden",
+          "Quietstorm"
+        ]
+      }
+    ]
+  },
+
+  {
+    "id": "swift_step",
+    "name": "Swift Step",
+    "description": "Passive: +2 Speed. Applied the moment it is learned.",
+    "trigger": "on_gain",
+    "effects": [{ "type": "modify_stat", "stat": "spd", "amount": 2 }]
+  },
+  {
+    "id": "keen_arm",
+    "name": "Keen Arm",
+    "description": "Passive: +2 Attack.",
+    "trigger": "on_gain",
+    "effects": [{ "type": "modify_stat", "stat": "atk", "amount": 2 }]
+  },
+  {
+    "id": "ironbark",
+    "name": "Ironbark",
+    "description": "Passive: +2 Defense.",
+    "trigger": "on_gain",
+    "effects": [{ "type": "modify_stat", "stat": "def", "amount": 2 }]
+  },
+  {
+    "id": "vengeful_bloom",
+    "name": "Vengeful Bloom",
+    "description": "On a kill, restore 6 HP. Bloodshed knits the wound.",
+    "trigger": "on_kill",
+    "effects": [{ "type": "heal", "amount": 6 }]
+  },
+  {
+    "id": "forest_ward",
+    "name": "Forest Ward",
+    "description": "At the start of your turn, if standing in forest, restore 2 HP.",
+    "trigger": "on_turn_start",
+    "condition": { "type": "on_terrain", "terrain": "forest" },
+    "effects": [{ "type": "heal", "amount": 2 }]
+  }
+]
