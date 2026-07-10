@@ -1,0 +1,145 @@
+:root {
+  --bg: #14181c;
+  --panel: #1e2429;
+  --panel-2: #262d34;
+  --ink: #e8e4d8;
+  --ink-dim: #9aa0a6;
+  --player: #f2d675;
+  --enemy: #c79bf0;
+  --accent: #6fb1ff;
+  --danger: #ff6b6b;
+  --cell: 34px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 14px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+#app { display: flex; gap: 16px; padding: 16px; align-items: flex-start; flex-wrap: wrap; }
+
+header.topbar {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #2c333a;
+}
+header.topbar h1 { font-size: 16px; margin: 0; color: var(--player); letter-spacing: 0.5px; }
+header.topbar .spacer { flex: 1; }
+header.topbar .turn { color: var(--ink-dim); }
+header.topbar .phase-player { color: var(--player); }
+header.topbar .phase-enemy { color: var(--enemy); }
+header.topbar .outcome { font-weight: bold; }
+header.topbar .outcome.win { color: var(--player); }
+header.topbar .outcome.loss { color: var(--danger); }
+
+button, input {
+  font: inherit;
+  color: var(--ink);
+  background: var(--panel-2);
+  border: 1px solid #39424a;
+  border-radius: 4px;
+  padding: 5px 10px;
+  cursor: pointer;
+}
+button:hover:not(:disabled) { background: #313b43; }
+button:disabled { opacity: 0.4; cursor: default; }
+input { width: 70px; cursor: text; }
+
+/* --- board --- */
+#board {
+  display: grid;
+  gap: 1px;
+  background: #0c0f12;
+  padding: 1px;
+  border-radius: 4px;
+  user-select: none;
+}
+.cell {
+  width: var(--cell);
+  height: var(--cell);
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  font-weight: bold;
+}
+/* Height advantage feeds crits, so it must read at a glance. */
+.cell.elev-0 { filter: brightness(0.82); }
+.cell.elev-1 { filter: brightness(1); }
+.cell.elev-2 { filter: brightness(1.22); }
+.cell .hill {
+  position: absolute;
+  top: 1px; left: 2px;
+  font-size: 9px;
+  color: rgba(255,255,255,0.7);
+  filter: none;
+}
+
+.cell .glyph { position: relative; text-shadow: 0 1px 2px #000, 0 0 3px #000; }
+.cell .glyph.player { color: var(--player); }
+.cell .glyph.enemy { color: var(--enemy); }
+.cell .glyph.dead { opacity: 0.25; text-decoration: line-through; }
+.cell .glyph.spent { opacity: 0.5; }
+
+.cell .hp {
+  position: absolute;
+  bottom: 1px; left: 2px; right: 2px;
+  height: 3px;
+  background: #000a;
+  border-radius: 2px;
+  overflow: hidden;
+}
+.cell .hp > span { display: block; height: 100%; background: #6ad06a; }
+.cell .hp > span.low { background: var(--danger); }
+
+/* interaction overlays */
+.cell.move::after,
+.cell.attack::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  filter: none;
+  pointer-events: none;
+}
+.cell.move::after { box-shadow: inset 0 0 0 2px var(--accent); background: rgba(111,177,255,0.18); }
+.cell.attack::after { box-shadow: inset 0 0 0 2px var(--danger); background: rgba(255,107,107,0.22); }
+.cell.selected { outline: 2px solid var(--player); outline-offset: -2px; z-index: 2; }
+.cell.clickable { cursor: pointer; }
+
+/* --- sidebar --- */
+#sidebar { width: 300px; display: flex; flex-direction: column; gap: 12px; }
+.card { background: var(--panel); border: 1px solid #2c333a; border-radius: 6px; padding: 10px 12px; }
+.card h2 { margin: 0 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: var(--ink-dim); }
+.controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+.unit-name { font-size: 15px; font-weight: bold; }
+.unit-name.player { color: var(--player); }
+.unit-name.enemy { color: var(--enemy); }
+.stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 2px 12px; margin-top: 6px; color: var(--ink); }
+.stats .k { color: var(--ink-dim); }
+.abilities { margin-top: 8px; }
+.abilities li { margin-left: 16px; }
+.abilities .ab-name { color: var(--accent); }
+.muted { color: var(--ink-dim); }
+
+.forecast { margin-top: 8px; }
+.forecast .row { display: flex; justify-content: space-between; }
+.forecast .att { color: var(--player); }
+.forecast .def { color: var(--enemy); }
+
+#log { max-height: 320px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+#log .entry { white-space: pre-wrap; }
+#log .k-phase { color: var(--accent); margin-top: 4px; }
+#log .k-combat { color: var(--ink); }
+#log .k-evolve { color: var(--player); font-weight: bold; }
+#log .k-rename { color: var(--player); }
+#log .k-buff, #log .k-heal { color: #6ad06a; }
+#log .k-result { color: #ffd479; font-weight: bold; margin-top: 4px; }
