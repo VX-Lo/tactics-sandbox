@@ -60,5 +60,13 @@
     "trigger": "on_turn_start",
     "condition": { "type": "on_terrain", "terrain": "forest" },
     "effects": [{ "type": "heal", "amount": 2 }]
+  },
+  {
+    "id": "mend_aura",
+    "name": "Mend Aura",
+    "description": "At the start of your turn, restore 4 HP to each adjacent ally.",
+    "_note": "The only source of active healing. Uses the heal_allies primitive; no self-heal, so the mender must be shielded.",
+    "trigger": "on_turn_start",
+    "effects": [{ "type": "heal_allies", "amount": 4, "radius": 1 }]
   }
 ]

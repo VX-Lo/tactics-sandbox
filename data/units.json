@@ -108,6 +108,61 @@
     ]
   },
   {
+    "id": "kaede",
+    "name": "Kaede",
+    "glyph": "K",
+    "faction": "player",
+    "tier": "named",
+    "_note": "Mender. The only active healer: her Mend Aura tops up adjacent allies each turn. Weak on offense and has no self-heal, so fielding her means protecting her — and benching her means no sustain at all.",
+    "stats": {
+      "maxHp": 22,
+      "atk": 6,
+      "def": 5,
+      "spd": 6,
+      "skl": 7
+    },
+    "movement": {
+      "points": 5
+    },
+    "attack": {
+      "minRange": 1,
+      "maxRange": 1,
+      "hit": 88,
+      "crit": 3
+    },
+    "abilities": [
+      "evolve_on_kill",
+      "mend_aura"
+    ]
+  },
+  {
+    "id": "mei",
+    "name": "Mei",
+    "glyph": "M",
+    "faction": "player",
+    "_note": "Glass cannon. Enormous attack, fast enough to double and crit often — but paper-thin. A single reached blow can end her, so fielding her is a real risk.",
+    "tier": "named",
+    "stats": {
+      "maxHp": 18,
+      "atk": 12,
+      "def": 2,
+      "spd": 10,
+      "skl": 10
+    },
+    "movement": {
+      "points": 5
+    },
+    "attack": {
+      "minRange": 1,
+      "maxRange": 1,
+      "hit": 92,
+      "crit": 15
+    },
+    "abilities": [
+      "evolve_on_kill"
+    ]
+  },
+  {
     "id": "skeleton",
     "name": "Skeleton",
     "glyph": "z",
