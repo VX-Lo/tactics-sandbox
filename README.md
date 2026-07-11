@@ -2,11 +2,11 @@
 
 A single-player tactics game in the Fire Emblem tradition, built as the seed of
 a larger sandbox. Four elves defend a procedurally generated forest against an
-undead horde. Units are **data, not code**: they carry their own stats,
-movement, and a list of triggered abilities, and they **evolve mid-battle** —
-any kill teaches the killer a new ability and earns her a new name.
-
-This is the first prototype: one good fight on one generated map.
+undead horde across a short **run** of battles. Units are **data, not code**:
+they carry their own stats, movement, and a list of triggered abilities, and
+they **evolve mid-battle** as they earn XP — a level-up teaches a new ability
+and earns a new name. Survivors carry forward between battles; the dead are gone
+for good.
 
 ## Quickstart
 
@@ -15,14 +15,19 @@ Requires **Node 18+** (the toolchain is pinned in `package.json`).
 ```bash
 npm install
 npm run dev      # play in the browser (Vite, http://localhost:5173)
-npm test         # run the headless engine test suite (Vitest)
+npm test         # run the headless test suite (Vitest)
 npm run build    # typecheck + production build
 ```
 
+- **`/`** — the full run: a roster screen where you pick one of three
+  encounters, then fight it.
+- **`/battle.html`** — a single-battle sandbox for a raw skirmish on a seed.
+
 Play: click one of your elves to see her move range (blue), click a tile to
 move, then click an in-range enemy (red) to attack — hover a target first for a
-combat forecast. **End Turn** hands off to the undead. A kill makes an elf
-evolve. Rout the horde to win; lose your last elf and the forest goes dark.
+combat forecast. **End Turn** hands off to the undead. Kills earn XP; crossing a
+level threshold evolves an elf mid-fight. Clear the encounter, choose the next,
+and try to survive the run.
 
 ## Design philosophy
 
@@ -64,9 +69,19 @@ src/engine/           the fixed, small engine — no DOM, fully testable
   battle.ts           orchestration: turns, commands, win/loss, wiring
   ai.ts               a small deterministic greedy policy (drives enemies)
 
+src/run/               the run layer — sits ABOVE the engine, drives it
+  content.ts          run's content variant (elves evolve on level-up)
+  biomes.ts           named MapGenConfig presets (terrain per encounter)
+  encounters.ts       deterministic candidate generation + XP scaling
+  progression.ts      XP thresholds + level math (pure)
+  run.ts              run state machine: roster, encounters, permadeath
+
 src/ui/               presentation only, downstream of the engine
-  render.ts           pure (battle, view) -> HTML
-  main.ts             controller: clicks -> engine commands
+  render.ts           pure (battle, view) -> HTML (board + panels)
+  battle-view.ts      mountable battle UI, shared by sandbox and run
+  run-render.ts       pure (run) -> HTML (roster + encounter screens)
+  main.ts             single-battle sandbox controller (battle.html)
+  run-main.ts         run controller: sequences roster <-> battles (index)
   style.css
 ```
 
@@ -78,6 +93,45 @@ greppable and diff-friendly. `_note` fields carry human annotation.
 picks, map noise — draws from a PRNG seeded once per battle (`rng.ts`);
 `Math.random` is banned in engine code. `test/battle.test.ts` proves that two
 same-seed battles auto-play to a byte-identical state and log.
+
+## The run layer
+
+A **run** is a sequence of battles (4 by default) with persistent, evolving
+units, built entirely *above* the battle engine: it drives `Battle` only through
+the public command API and observes it only through the event bus. The engine
+never learns what a run, XP, or an encounter is. The seams that make this work
+without changing rules logic:
+
+- **XP/level live in the run, not on the engine `Unit`.** A `RosterEntry
+  {unit, xp, level}` holds progression; the engine `Unit` stays exactly what
+  battle needs.
+- **Evolution reuses the ability grammar.** The run supplies a content variant
+  where elves carry `evolve_on_level` (trigger `on_level_up`) with the *same*
+  grant+rename effects as the on-kill version. When a unit levels, the run fires
+  `on_level_up` through its **own** ability-system instance against the shared
+  unit — so evolution happens (mid-fight, live) with zero engine involvement.
+- **Persistent units carry across battles** via a run-agnostic `playerUnits`
+  option on `Battle` (deploy pre-built instances instead of instantiating a
+  roster; their `on_gain` passives aren't re-applied).
+- **XP has two sources** (per the design): live **kill-XP** during a fight
+  (observed on `on_kill`, evolves mid-battle), scaled by victim strength ×
+  difficulty; and **clear-XP** to each survivor on victory. Thresholds are
+  cumulative `100/250/450/700`, one evolution per level. Survivors heal to full
+  between battles (no healing economy yet); **permadeath is persistent** — the
+  fallen leave the roster for the whole run.
+- **Encounters are data.** Each interval the run generates three candidates
+  (difficulty → enemy strength budget + XP reward, biome → mapgen preset, plus a
+  battle seed). Picking one is the whole decision.
+
+**Determinism** extends to the whole run: it is fixed by its seed plus the
+ordered list of encounter picks, with independent RNG streams for encounter
+generation and evolution rolls. `test/run.test.ts` proves two same-seed,
+same-choice runs are byte-identical.
+
+The only engine-file changes the run required were **additive vocabulary**: an
+`on_level_up` trigger, a `tier: named | unnamed` field on units, and the
+`playerUnits` injection option. Movement, combat, and ability *resolution* were
+untouched, and the engine's `defaultContent` and tests are unchanged.
 
 ## The ability grammar (the core bet)
 
@@ -138,9 +192,13 @@ in `abilities.ts` — the bounded, rare case, done once and then reusable foreve
 
 ## Deliberately not built
 
-No cards, politics, economy, campaign map, or between-battle progression. The
-data model is designed for that future (units drift arbitrarily far from their
-templates), but the prototype exercises only a slice of it. One fight, one map.
+No deployment choice (committing a subset of units), tier promotion, generated
+names, shops, rewards beyond XP, or a persistent branching map. No cards,
+politics, or economy. The data model is designed for that future (units drift
+arbitrarily far from their templates, `tier` is left open for a third rank), but
+the prototype exercises only a slice of it. Healing/recovery does not exist yet,
+so units heal to full between battles — persistent wounds return once there's a
+recovery economy to make benching a wounded unit a real cost.
 
 ## Note on Node
 
