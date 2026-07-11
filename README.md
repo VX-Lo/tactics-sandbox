@@ -19,8 +19,8 @@ npm test         # run the headless test suite (Vitest)
 npm run build    # typecheck + production build
 ```
 
-- **`/`** — the full run: a roster screen where you pick one of three
-  encounters, then fight it.
+- **`/`** — the full run: pick one of three encounters, choose which units to
+  field (the roster outsizes the field cap), then fight it.
 - **`/battle.html`** — a single-battle sandbox for a raw skirmish on a seed.
 
 Play: click one of your elves to see her move range (blue), click a tile to
@@ -74,14 +74,14 @@ src/run/               the run layer — sits ABOVE the engine, drives it
   biomes.ts           named MapGenConfig presets (terrain per encounter)
   encounters.ts       deterministic candidate generation + XP scaling
   progression.ts      XP thresholds + level math (pure)
-  run.ts              run state machine: roster, encounters, permadeath
+  run.ts              run state machine: roster, encounters, deployment, permadeath
 
 src/ui/               presentation only, downstream of the engine
   render.ts           pure (battle, view) -> HTML (board + panels)
   battle-view.ts      mountable battle UI, shared by sandbox and run
-  run-render.ts       pure (run) -> HTML (roster + encounter screens)
+  run-render.ts       pure (run) -> HTML (roster / deploy / end screens)
   main.ts             single-battle sandbox controller (battle.html)
-  run-main.ts         run controller: sequences roster <-> battles (index)
+  run-main.ts         run controller: sequences roster -> deploy -> battle (index)
   style.css
 ```
 
@@ -115,23 +115,35 @@ without changing rules logic:
   roster; their `on_gain` passives aren't re-applied).
 - **XP has two sources** (per the design): live **kill-XP** during a fight
   (observed on `on_kill`, evolves mid-battle), scaled by victim strength ×
-  difficulty; and **clear-XP** to each survivor on victory. Thresholds are
-  cumulative `100/250/450/700`, one evolution per level. Survivors heal to full
-  between battles (no healing economy yet); **permadeath is persistent** — the
-  fallen leave the roster for the whole run.
+  difficulty; and **clear-XP** to each *deployed* survivor on victory. Thresholds
+  are cumulative `100/250/450/700`, one evolution per level. Deployed units heal
+  to full each battle (no healing economy yet); **permadeath is persistent** —
+  the fallen leave the roster for the whole run.
 - **Encounters are data.** Each interval the run generates three candidates
   (difficulty → enemy strength budget + XP reward, biome → mapgen preset, plus a
   battle seed). Picking one is the whole decision.
+- **Deployment is a choice.** The roster (6 named elves) exceeds a per-battle
+  field cap (4), both `RunConfig`-tunable. After choosing an encounter the
+  player fields a subset: only deployed units are injected, healed, and earn XP.
+  Benched units sit out — no kill-XP, no clear-XP, no damage, cannot die — and
+  carry forward untouched. A battle can be lost with benched survivors and the
+  run continues; it ends only when the whole roster is dead or all battles pass.
+  The engine already accepted an arbitrary injected unit list, so this is purely
+  the run choosing *which* units to inject.
 
 **Determinism** extends to the whole run: it is fixed by its seed plus the
-ordered list of encounter picks, with independent RNG streams for encounter
-generation and evolution rolls. `test/run.test.ts` proves two same-seed,
-same-choice runs are byte-identical.
+ordered list of **encounter and deployment picks**, with independent RNG streams
+for encounter generation and evolution rolls. Deployment picks are recorded in
+`deploymentHistory` (and `snapshot()`); injection uses canonical roster order,
+independent of click order. `test/run.test.ts` proves two same-seed, same-choice
+runs are byte-identical.
 
 The only engine-file changes the run required were **additive vocabulary**: an
-`on_level_up` trigger, a `tier: named | unnamed` field on units, and the
-`playerUnits` injection option. Movement, combat, and ability *resolution* were
-untouched, and the engine's `defaultContent` and tests are unchanged.
+`on_level_up` trigger, a `tier: named | unnamed` field on units, the
+`playerUnits` injection option, and a `heal_allies` effect primitive (for the
+mender archetype's aura — a new registry entry, not a rules change). Movement,
+combat, and ability *resolution* are untouched, and the engine's `defaultContent`
+behaviour and tests are unchanged.
 
 ## The ability grammar (the core bet)
 
@@ -192,9 +204,10 @@ in `abilities.ts` — the bounded, rare case, done once and then reusable foreve
 
 ## Deliberately not built
 
-No deployment choice (committing a subset of units), tier promotion, generated
-names, shops, rewards beyond XP, or a persistent branching map. No cards,
-politics, or economy. The data model is designed for that future (units drift
+No recruitment (gaining new units), tier promotion or a third supporting tier,
+generated names, wound/recovery economy, shops, rewards beyond XP, or a
+persistent branching map. No cards, politics, or economy. The data model is
+designed for that future (units drift
 arbitrarily far from their templates, `tier` is left open for a third rank), but
 the prototype exercises only a slice of it. Healing/recovery does not exist yet,
 so units heal to full between battles — persistent wounds return once there's a
