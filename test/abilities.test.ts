@@ -42,6 +42,34 @@ describe('ability system — primitives', () => {
     sys.dispatch(ctx, evt('on_kill', u))
     expect(u.hp).toBe(28)
   })
+
+  it('heal_allies mends adjacent allies only (not self, foes, or the distant)', () => {
+    const sys = makeAbilitySystem()
+    const healer = place('yuki', 'healer', { x: 2, y: 2 })
+    const nearAlly = place('hana', 'near', { x: 2, y: 3 }) // adjacent, wounded
+    const capAlly = place('aoi', 'cap', { x: 3, y: 2 }) // adjacent, near-full
+    const farAlly = place('sakura', 'far', { x: 4, y: 4 }) // out of radius
+    const foe = place('skeleton', 'foe', { x: 1, y: 2 }) // adjacent, enemy
+    healer.hp = 5
+    nearAlly.hp = 5
+    capAlly.hp = capAlly.stats.maxHp - 2
+    farAlly.hp = 5
+    foe.hp = 5
+
+    const aura: AbilityDef = {
+      id: 'aura', name: 'Aura', trigger: 'on_turn_start',
+      effects: [{ type: 'heal_allies', amount: 4, radius: 1 }],
+    }
+    healer.abilities = [aura]
+    const { ctx } = ctxFor([healer, nearAlly, capAlly, farAlly, foe])
+    sys.dispatch(ctx, evt('on_turn_start', healer))
+
+    expect(nearAlly.hp).toBe(9) // +4
+    expect(capAlly.hp).toBe(capAlly.stats.maxHp) // capped, not +4 over max
+    expect(farAlly.hp).toBe(5) // out of radius
+    expect(foe.hp).toBe(5) // enemy untouched
+    expect(healer.hp).toBe(5) // owner excluded
+  })
 })
 
 describe('ability system — evolution', () => {

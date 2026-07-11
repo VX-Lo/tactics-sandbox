@@ -16,7 +16,7 @@
 // the mechanic the brief asked for is expressed in the same grammar as
 // everything else, not special-cased here.
 
-import { tileAt } from './grid'
+import { manhattan, tileAt } from './grid'
 import type {
   AbilityDef,
   ConditionHandler,
@@ -81,6 +81,29 @@ export function makeAbilitySystem(): AbilitySystem {
           message: `${event.unit.name} recovers ${gained} HP.`,
           data: { unitId: event.unit.id, gained },
         })
+    },
+
+    // Heal allied units within `radius` tiles of the owner (excluding the
+    // owner). A support primitive: the healer tops up neighbours each turn
+    // without any new battle action — it reads state and mends, staying inside
+    // the trigger->effect grammar. Deterministic (units iterated in order, no rng).
+    heal_allies: (ctx, effect, event) => {
+      const healer = event.unit
+      const amount = effect.amount as number
+      const radius = (effect.radius as number) ?? 1
+      for (const u of ctx.state.units) {
+        if (!u.alive || u.id === healer.id || u.faction !== healer.faction) continue
+        if (manhattan(u.pos, healer.pos) > radius) continue
+        const before = u.hp
+        u.hp = Math.min(u.stats.maxHp, u.hp + amount)
+        const gained = u.hp - before
+        if (gained > 0)
+          ctx.log({
+            kind: 'heal',
+            message: `${healer.name} mends ${u.name} (+${gained} HP).`,
+            data: { unitId: u.id, gained },
+          })
+      }
     },
 
     // Replace the owner's earned title. The base given name comes from the
