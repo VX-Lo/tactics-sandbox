@@ -28,6 +28,7 @@ const TRIGGERS: ReadonlySet<TriggerType> = new Set<TriggerType>([
   'on_attack',
   'on_take_damage',
   'on_adjacent',
+  'on_level_up',
 ])
 
 // --- tiny validation helpers -------------------------------------------------
@@ -98,6 +99,8 @@ function parseUnit(raw: unknown, abilities: Record<string, AbilityDef>): UnitDef
   req(typeof u.name === 'string', `unit "${u.id}" missing name`)
   req(typeof u.glyph === 'string', `unit "${u.id}" missing glyph`)
   req(u.faction === 'player' || u.faction === 'enemy', `unit "${u.id}" bad faction`)
+  req(u.tier === undefined || u.tier === 'named' || u.tier === 'unnamed',
+    `unit "${u.id}" bad tier "${String(u.tier)}"`)
   req(isObj(u.stats), `unit "${u.id}" missing stats`)
   const s = u.stats as Record<string, unknown>
   for (const k of ['maxHp', 'atk', 'def', 'spd', 'skl'] as const)
@@ -147,6 +150,7 @@ export function instantiateUnit(content: Content, defId: string, instanceId: str
     defId: def.id,
     name: def.name,
     faction: def.faction,
+    tier: def.tier ?? 'unnamed',
     glyph: def.glyph,
     stats: { ...def.stats },
     hp: def.stats.maxHp,

@@ -13,6 +13,15 @@ export interface Coord {
 
 export type Faction = 'player' | 'enemy'
 
+/**
+ * Unit tier. Data groundwork for the run layer: "named" units (the elves) are
+ * protagonists that persist, evolve, and are shown prominently; "unnamed" are
+ * generic and regenerated per battle. The engine itself never branches on tier
+ * — only presentation and the run layer read it. Left open for a future third
+ * tier (e.g. "elite").
+ */
+export type Tier = 'named' | 'unnamed'
+
 export interface Stats {
   maxHp: number
   atk: number
@@ -74,6 +83,7 @@ export type TriggerType =
   | 'on_attack'
   | 'on_take_damage'
   | 'on_adjacent'
+  | 'on_level_up' // fires when a unit gains a level; emitted by the run layer, not the battle
 // To add a genuinely new *kind* of moment, extend this union AND emit the event
 // from the relevant subsystem. That is the deliberate, bounded engine change.
 // Individual abilities never require it — they only recombine existing triggers
@@ -130,6 +140,8 @@ export interface UnitDef {
   name: string
   glyph: string
   faction: Faction
+  /** Defaults to "unnamed" when absent in data. */
+  tier?: Tier
   stats: Stats
   movement: MovementProfile
   attack: AttackProfile
@@ -147,6 +159,7 @@ export interface Unit {
   defId: string
   name: string
   faction: Faction
+  tier: Tier
   glyph: string
   stats: Stats
   hp: number

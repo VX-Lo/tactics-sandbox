@@ -34,6 +34,13 @@ export interface BattleOptions {
   /** Unit def ids to field for each side; defaults to the prototype's roster. */
   playerRoster?: string[]
   enemyRoster?: string[]
+  /**
+   * Pre-built player units to deploy instead of instantiating from
+   * playerRoster. Run-agnostic: it lets a caller carry persistent units across
+   * battles. Their on_gain passives are assumed already applied (the battle
+   * won't re-apply them), and their positions are reassigned on deployment.
+   */
+  playerUnits?: Unit[]
 }
 
 const DEFAULT_PLAYER_ROSTER = ['sakura', 'hana', 'yuki', 'aoi']
@@ -56,11 +63,7 @@ export class Battle {
     this.abilities = makeAbilitySystem()
 
     const grid = generateMap(opts.seed, opts.mapConfig ?? DEFAULT_MAPGEN)
-    const units = this.deploy(
-      grid,
-      opts.playerRoster ?? DEFAULT_PLAYER_ROSTER,
-      opts.enemyRoster ?? DEFAULT_ENEMY_ROSTER,
-    )
+    const { units, injected } = this.deploy(grid, opts)
     this.state = { grid, units, turn: 1, phase: 'player', seed: opts.seed, outcome: 'ongoing' }
 
     // Stable context object handed to every ability handler.
@@ -74,14 +77,20 @@ export class Battle {
     // may subscribe too, for narration or animation.
     this.bus.on((event) => this.abilities.dispatch(this.ctx, event))
 
-    // Apply any starting on_gain passives, then open the first player phase.
-    for (const u of units) for (const a of u.abilities) this.abilities.applyOnGain(this.ctx, u, a)
+    // Apply starting on_gain passives — but NOT for injected units, whose
+    // passives were already applied when they were first built; re-applying
+    // would stack them every battle.
+    for (const u of units)
+      if (!injected.has(u.id)) for (const a of u.abilities) this.abilities.applyOnGain(this.ctx, u, a)
     this.beginPhase('player')
   }
 
   // --- deployment ------------------------------------------------------------
 
-  private deploy(grid: BattleState['grid'], playerDefs: string[], enemyDefs: string[]): Unit[] {
+  private deploy(
+    grid: BattleState['grid'],
+    opts: BattleOptions,
+  ): { units: Unit[]; injected: Set<string> } {
     const taken = new Set<string>()
     const units: Unit[] = []
     const counters: Record<string, number> = {}
@@ -91,31 +100,41 @@ export class Battle {
       return `${defId}#${counters[defId]}`
     }
 
-    const spawn = (defs: string[], fromLeft: boolean): void => {
+    // Assign board positions to already-built units, hugging one edge.
+    const position = (list: Unit[], fromLeft: boolean): void => {
       const cols = fromLeft
         ? [...Array(grid.width).keys()]
         : [...Array(grid.width).keys()].reverse()
       let placed = 0
       for (const x of cols) {
-        if (placed >= defs.length) break
+        if (placed >= list.length) break
         for (const y of centerOut(grid.height)) {
-          if (placed >= defs.length) break
+          if (placed >= list.length) break
           const terrain = this.content.terrain[grid.tiles[y * grid.width + x].terrain]
           const k = `${x},${y}`
           if (!terrain.passable || taken.has(k)) continue
-          const u = instantiateUnit(this.content, defs[placed], nextId(defs[placed]))
-          u.pos = { x, y }
+          list[placed].pos = { x, y }
           taken.add(k)
-          units.push(u)
+          units.push(list[placed])
           placed++
         }
       }
-      if (placed < defs.length) throw new Error('deploy: not enough passable tiles for the roster')
+      if (placed < list.length) throw new Error('deploy: not enough passable tiles for the roster')
     }
 
-    spawn(playerDefs, true)
-    spawn(enemyDefs, false)
-    return units
+    const injected = new Set<string>()
+    if (opts.playerUnits) {
+      position(opts.playerUnits, true)
+      for (const u of opts.playerUnits) injected.add(u.id)
+    } else {
+      const defs = opts.playerRoster ?? DEFAULT_PLAYER_ROSTER
+      position(defs.map((d) => instantiateUnit(this.content, d, nextId(d))), true)
+    }
+
+    const enemyDefs = opts.enemyRoster ?? DEFAULT_ENEMY_ROSTER
+    position(enemyDefs.map((d) => instantiateUnit(this.content, d, nextId(d))), false)
+
+    return { units, injected }
   }
 
   // --- queries (read-only helpers for a driver) ------------------------------
