@@ -20,7 +20,13 @@ body {
   font: 14px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
-#app { display: flex; gap: 16px; padding: 16px; align-items: flex-start; flex-wrap: wrap; }
+#app { padding: 16px; }
+
+/* Battle view + run screens lay out their own content rows below the top bar. */
+.battle-main { display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; margin-top: 12px; }
+.battle-topbar { display: flex; align-items: center; gap: 16px; }
+.battle-topbar .banner { color: var(--ink-dim); }
+.battle-topbar .banner strong { color: var(--player); }
 
 header.topbar {
   width: 100%;
@@ -143,3 +149,64 @@ input { width: 70px; cursor: text; }
 #log .k-rename { color: var(--player); }
 #log .k-buff, #log .k-heal { color: #6ad06a; }
 #log .k-result { color: #ffd479; font-weight: bold; margin-top: 4px; }
+
+/* --- links --- */
+.linklike { text-decoration: none; }
+.linklike:hover { color: var(--ink); }
+
+/* --- run screens --- */
+.section { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: var(--ink-dim); margin: 4px 0 8px; }
+.section.loss { color: var(--danger); }
+
+.run-screen { display: flex; gap: 20px; align-items: flex-start; margin-top: 12px; flex-wrap: wrap; }
+.roster-col { flex: 1 1 520px; }
+.encounter-col { flex: 1 1 360px; max-width: 460px; }
+
+.roster-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
+.unit-card { background: var(--panel); border: 1px solid #2c333a; border-radius: 8px; padding: 10px 12px; }
+.uc-head { display: flex; align-items: center; gap: 8px; }
+.uc-head .glyph { font-size: 18px; font-weight: bold; }
+.uc-head .unit-name { flex: 1; font-size: 15px; }
+.level { background: var(--panel-2); border-radius: 10px; padding: 1px 8px; font-size: 12px; color: var(--player); }
+.xpbar { height: 5px; background: #000a; border-radius: 3px; overflow: hidden; margin: 8px 0; }
+.xpbar > span { display: block; height: 100%; background: var(--accent); }
+.uc-stats { font-size: 12px; }
+.unit-card .abilities { margin-top: 6px; padding: 0; list-style: none; }
+.unit-card .abilities li { margin-left: 0; }
+
+.fallen-list { display: flex; flex-direction: column; gap: 3px; }
+.fallen-item { color: var(--ink-dim); }
+.fallen-item .glyph { margin-right: 4px; }
+
+.encounter-cards { display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px; }
+.encounter-card {
+  text-align: left;
+  background: var(--panel);
+  border: 1px solid #39424a;
+  border-radius: 8px;
+  padding: 12px 14px;
+  cursor: pointer;
+  transition: border-color 0.1s, transform 0.05s;
+}
+.encounter-card:hover { border-color: var(--player); transform: translateY(-1px); background: var(--panel-2); }
+.ec-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+.ec-biome { font-size: 15px; font-weight: bold; color: var(--ink); }
+.ec-diff { font-size: 12px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; }
+.diff-skirmish { color: #6ad06a; }
+.diff-raid { color: #ffd479; }
+.diff-horde { color: var(--danger); }
+.ec-blurb { font-size: 12px; margin-bottom: 6px; }
+.ec-foes { font-size: 14px; }
+.ec-foes .foe { color: var(--enemy); margin-right: 4px; }
+.ec-reward { margin-top: 6px; color: var(--accent); font-size: 13px; }
+
+#runlog { max-height: 300px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+#runlog .entry { white-space: pre-wrap; }
+#runlog .k-run { color: var(--accent); }
+#runlog .k-xp { color: #8bd0ff; }
+#runlog .k-levelup { color: var(--player); font-weight: bold; }
+#runlog .k-evolve { color: var(--player); font-weight: bold; }
+#runlog .k-rename { color: var(--player); }
+#runlog .k-buff, #runlog .k-heal { color: #6ad06a; }
+#runlog .k-fallen { color: var(--danger); }
+#runlog .k-result { color: #ffd479; font-weight: bold; margin-top: 4px; }

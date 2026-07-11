@@ -4,6 +4,15 @@ import { defineConfig } from 'vitest/config'
 // The engine is environment-agnostic; tests run in 'node' to keep the
 // simulation honest about having no DOM dependency.
 export default defineConfig({
+  build: {
+    rollupOptions: {
+      // Two entry pages: the full run (index) and the single-battle sandbox.
+      input: {
+        main: 'index.html',
+        battle: 'battle.html',
+      },
+    },
+  },
   test: {
     globals: true,
     environment: 'node',
