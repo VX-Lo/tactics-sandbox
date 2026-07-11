@@ -43,7 +43,10 @@ export function boardHTML(battle: Battle, view: ViewState): string {
       if (clickable) classes.push('clickable')
 
       let inner = ''
-      if (tile.elevation === 2) inner += '<span class="hill">▲</span>'
+      // Height is the crit driver, so show it explicitly: elevated tiles carry a
+      // corner number (flat ground stays unmarked to keep the board quiet).
+      if (tile.elevation > 0)
+        inner += `<span class="elev-mark lvl${tile.elevation}" aria-hidden="true">${tile.elevation}</span>`
       if (occ) {
         const spent = occ.faction === 'player' && occ.hasActed ? ' spent' : ''
         inner += `<span class="glyph ${occ.faction}${spent}">${esc(occ.glyph)}</span>`
