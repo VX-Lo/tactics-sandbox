@@ -8,6 +8,7 @@
 
 import { Battle } from '../engine/battle'
 import { takeUnitTurn } from '../engine/ai'
+import { ELEVATION_CRIT_PER_LEVEL } from '../engine/combat'
 import { boardHTML, unitPanelHTML, forecastHTML, logHTML, type ViewState } from './render'
 
 export interface BattleViewOptions {
@@ -42,8 +43,9 @@ export function mountBattleView(
           <div class="card"><h2>Selected</h2><div id="unitPanel"></div><div id="forecast"></div></div>
           <div class="card"><h2>Chronicle</h2><div id="log"></div></div>
           <div class="card"><h2>Legend</h2>
-            <div class="muted">▲ high ground (uphill attacks crit more) · forest shields defenders ·
-            water &amp; crags block. Move (blue), then strike an enemy in range (red).
+            <div class="muted">High ground: +${ELEVATION_CRIT_PER_LEVEL}% crit per level when attacking from above
+            (the higher tile wins). Forest shields defenders; water &amp; crags block.
+            Move (blue), then strike an enemy in range (red).
             Kills earn XP; a level-up evolves an elf mid-fight.</div>
           </div>
         </div>
