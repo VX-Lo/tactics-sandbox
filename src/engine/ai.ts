@@ -81,25 +81,34 @@ export function takeUnitTurn(battle: Battle, unit: Unit): boolean {
   return false
 }
 
-/** Run the entire current phase with the greedy policy, then end it. */
-export function playPhase(battle: Battle): void {
+/** Run the entire current phase with the greedy policy, then end it.
+ *  Returns whether any unit actually moved or attacked. */
+export function playPhase(battle: Battle): boolean {
   const faction = battle.state.phase
   // Stable activation order by id; snapshot ids since units may die mid-phase.
   const ids = battle
     .living(faction)
     .map((u) => u.id)
     .sort()
+  let acted = false
   for (const id of ids) {
     const u = battle.unitById(id)
-    if (u && u.alive && !u.hasActed) takeUnitTurn(battle, u)
+    if (u && u.alive && !u.hasActed && takeUnitTurn(battle, u)) acted = true
   }
   battle.endPhase()
+  return acted
 }
 
 /**
- * Auto-play a battle to conclusion (or a turn cap) with both sides greedy.
- * Used by tests to exercise a full deterministic run end to end.
+ * Auto-play a battle to conclusion with both sides greedy. Stops early on a
+ * stalemate — a full round (both phases) in which no unit could move or attack,
+ * e.g. forces isolated by impassable terrain — leaving the outcome 'ongoing' for
+ * the caller to treat as a draw. The turn cap is a final backstop.
  */
 export function autoPlay(battle: Battle, turnCap = 200): void {
-  while (battle.outcome === 'ongoing' && battle.state.turn <= turnCap) playPhase(battle)
+  let idlePhases = 0
+  while (battle.outcome === 'ongoing' && battle.state.turn <= turnCap) {
+    if (playPhase(battle)) idlePhases = 0
+    else if (++idlePhases >= 2) break // neither side acted for a whole round
+  }
 }

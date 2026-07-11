@@ -19,7 +19,7 @@ import { BIOMES } from './biomes'
 import { generateEncounters, killXp, type Encounter } from './encounters'
 import { grantXp } from './progression'
 
-export type RunPhase = 'roster' | 'battle' | 'won' | 'lost'
+export type RunPhase = 'roster' | 'deploy' | 'battle' | 'won' | 'lost'
 
 export interface RosterEntry {
   unit: Unit
@@ -30,14 +30,22 @@ export interface RosterEntry {
 export interface RunConfig {
   seed: number
   battles?: number
+  /** Max units deployable per battle. The roster is larger, so this is a choice. */
+  fieldCap?: number
+  /** Unit defIds seeding the roster (default the six named elves). */
+  roster?: string[]
 }
 
-const NAMED_ELVES = ['sakura', 'hana', 'yuki', 'aoi']
+// Roster deliberately exceeds the field cap: that gap is the whole point of the
+// deployment decision. Both are tunable via RunConfig.
+const DEFAULT_ROSTER = ['sakura', 'hana', 'yuki', 'aoi', 'kaede', 'mei']
+const DEFAULT_FIELD_CAP = 4
 const DEFAULT_BATTLES = 4
 
 export class Run {
   readonly seed: number
   readonly totalBattles: number
+  readonly fieldCap: number
   readonly log: LogEntry[] = []
 
   roster: RosterEntry[]
@@ -45,6 +53,15 @@ export class Run {
   encounters: Encounter[]
   phase: RunPhase = 'roster'
   battleIndex = 0
+
+  /** The encounter chosen on the roster screen, awaiting a deployment pick. */
+  pendingEncounter: Encounter | null = null
+  /**
+   * Per completed battle, the deployed unit ids in canonical order. Part of the
+   * recorded run state: a run replays identically only if the same units were
+   * deployed each battle.
+   */
+  deploymentHistory: string[][] = []
 
   // Two independent deterministic streams derived from the run seed.
   private readonly encounterRng: Rng
@@ -54,15 +71,18 @@ export class Run {
   // Transient state while a battle is in progress.
   private battle: Battle | null = null
   private encounter: Encounter | null = null
+  private deployed: RosterEntry[] | null = null
   private unsub: (() => void) | null = null
 
   constructor(config: RunConfig) {
     this.seed = config.seed
     this.totalBattles = config.battles ?? DEFAULT_BATTLES
+    this.fieldCap = config.fieldCap ?? DEFAULT_FIELD_CAP
     this.encounterRng = makeRng(config.seed)
     this.progressionRng = makeRng((config.seed ^ 0x9e3779b9) >>> 0)
 
-    this.roster = NAMED_ELVES.map((defId, i) => ({
+    const defs = config.roster ?? DEFAULT_ROSTER
+    this.roster = defs.map((defId, i) => ({
       unit: instantiateUnit(runContent, defId, `${defId}#${i}`),
       xp: 0,
       level: 1,
@@ -75,15 +95,51 @@ export class Run {
     return this.battle
   }
 
-  /** Pick one of the current candidate encounters and start its battle. */
-  choose(index: number): Battle {
-    if (this.phase !== 'roster') throw new Error('choose() only valid on the roster screen')
+  /** Most units that may be fielded at once (cap, or the whole roster if smaller). */
+  maxDeployable(): number {
+    return Math.min(this.fieldCap, this.roster.length)
+  }
+
+  /** Pick a candidate encounter; advances to the deployment screen (no battle yet). */
+  chooseEncounter(index: number): void {
+    if (this.phase !== 'roster') throw new Error('chooseEncounter() only valid on the roster screen')
     const encounter = this.encounters[index]
     if (!encounter) throw new Error(`no encounter at index ${index}`)
+    this.pendingEncounter = encounter
+    this.phase = 'deploy'
+  }
 
-    // Heal survivors to full (no healing economy yet) and field the persistent
-    // unit objects directly, so evolutions/stats carry forward untouched.
-    for (const e of this.roster) {
+  /** Back out of deployment to re-pick the encounter. Records nothing. */
+  cancelDeploy(): void {
+    if (this.phase !== 'deploy') throw new Error('cancelDeploy() only valid on the deployment screen')
+    this.pendingEncounter = null
+    this.phase = 'roster'
+  }
+
+  /**
+   * Field the chosen subset (by roster unit id) and start the battle. The
+   * battle receives ONLY these units; benched units sit out — they earn no XP,
+   * take no damage, and are healed only if/when they are themselves deployed.
+   */
+  deploy(entryIds: string[]): Battle {
+    if (this.phase !== 'deploy' || !this.pendingEncounter) {
+      throw new Error('deploy() only valid on the deployment screen')
+    }
+    const encounter = this.pendingEncounter
+    const ids = new Set(entryIds)
+    const cap = this.maxDeployable()
+    if (ids.size < 1 || ids.size > cap) {
+      throw new Error(`deploy: must field between 1 and ${cap} units`)
+    }
+    // Canonical order (roster order), independent of click order, so the same
+    // subset always produces the same battle — required for deterministic replay.
+    const deployed = this.roster.filter((e) => ids.has(e.unit.id))
+    if (deployed.length !== ids.size) throw new Error('deploy: unknown unit id in selection')
+
+    // Heal only the deployed units to full; benched units are left untouched
+    // (no recovery from the bench — kept cleanly separable from any future
+    // healing economy).
+    for (const e of deployed) {
       e.unit.hp = e.unit.stats.maxHp
       e.unit.alive = true
     }
@@ -93,7 +149,7 @@ export class Run {
       content: runContent,
       mapConfig: BIOMES[encounter.biome].mapConfig,
       enemyRoster: encounter.enemyRoster,
-      playerUnits: this.roster.map((e) => e.unit),
+      playerUnits: deployed.map((e) => e.unit),
     })
 
     // Live kill-XP: award to the killer as kills happen, and evolve mid-fight if
@@ -105,10 +161,13 @@ export class Run {
 
     this.battle = battle
     this.encounter = encounter
+    this.deployed = deployed
+    this.deploymentHistory.push(deployed.map((e) => e.unit.id))
+    this.pendingEncounter = null
     this.phase = 'battle'
     this.log.push({
       kind: 'run',
-      message: `Encounter ${this.battleIndex + 1}/${this.totalBattles}: ${BIOMES[encounter.biome].label}, ${encounter.difficulty}.`,
+      message: `Encounter ${this.battleIndex + 1}/${this.totalBattles}: ${BIOMES[encounter.biome].label}, ${encounter.difficulty}. Fielding ${deployed.map((e) => e.unit.name).join(', ')}.`,
     })
     return battle
   }
@@ -118,26 +177,31 @@ export class Run {
    * advance the run, and generate the next candidates (or end the run).
    */
   finishBattle(): void {
-    if (this.phase !== 'battle' || !this.battle || !this.encounter) {
+    if (this.phase !== 'battle' || !this.battle || !this.encounter || !this.deployed) {
       throw new Error('finishBattle() with no battle in progress')
     }
     const battle = this.battle
     const encounter = this.encounter
-    if (battle.outcome === 'ongoing') throw new Error('finishBattle() before the battle concluded')
+    const deployed = this.deployed
     this.unsub?.()
 
     if (battle.outcome === 'player_win') {
-      // Clear-XP to each surviving named unit; any level-ups evolve now (on the
-      // roster screen), logged into the run chronicle.
+      // Clear-XP to surviving DEPLOYED units only. Benched units earn nothing
+      // from a battle they sat out — the opportunity cost of the bench.
       const ctx = this.ctxFor(battle, (e) => this.log.push(e))
-      for (const entry of this.roster) {
+      for (const entry of deployed) {
         if (!entry.unit.alive) continue
         grantXp(entry, encounter.xpReward, (lvl) => this.evolve(entry, ctx, this.log, lvl))
       }
       this.log.push({ kind: 'result', message: 'Encounter cleared.' })
+    } else if (battle.outcome === 'ongoing') {
+      // A stalemate (forces isolated, no clear victor): no reward, but the dead
+      // are still counted below and the run moves on.
+      this.log.push({ kind: 'result', message: 'The battle bogged down. No ground was gained.' })
     }
 
-    // Persistent permadeath: the dead leave the roster for the rest of the run.
+    // Persistent permadeath: only deployed units could have died; the dead leave
+    // the roster for the rest of the run. Benched units carry forward untouched.
     for (const entry of this.roster) {
       if (!entry.unit.alive) {
         this.fallen.push(entry)
@@ -148,7 +212,10 @@ export class Run {
     this.battleIndex += 1
     this.battle = null
     this.encounter = null
+    this.deployed = null
 
+    // The run ends only when the whole roster is dead (a battle can be lost with
+    // benched survivors and the run continues) or all battles are behind us.
     if (this.roster.length === 0) {
       this.phase = 'lost'
       this.log.push({ kind: 'result', message: 'The Deepwood has no defenders left. The forest goes dark.' })
@@ -200,11 +267,14 @@ export class Run {
     return {
       seed: this.seed,
       totalBattles: this.totalBattles,
+      fieldCap: this.fieldCap,
       battleIndex: this.battleIndex,
       phase: this.phase,
       roster: this.roster.map(entry),
       fallen: this.fallen.map(entry),
       encounters: this.encounters,
+      // Deployment picks are part of the replayable run state.
+      deploymentHistory: this.deploymentHistory,
     }
   }
 }

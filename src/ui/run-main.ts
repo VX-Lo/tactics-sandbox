@@ -40,7 +40,10 @@ function renderRoster(): void {
 function startBattle(index: number): void {
   const enc = run.encounters[index]
   const header = `<strong>Battle ${run.battleIndex + 1}/${run.totalBattles}</strong> — ${BIOMES[enc.biome].label} · ${DIFFICULTIES[enc.difficulty].label}`
-  const battle = run.choose(index)
+  // Interim: auto-field the first `cap` units. The deployment screen replaces
+  // this in the next commit.
+  run.chooseEncounter(index)
+  const battle = run.deploy(run.roster.slice(0, run.maxDeployable()).map((e) => e.unit.id))
   app.innerHTML = '<div id="viewport"></div>'
   const viewport = document.getElementById('viewport') as HTMLDivElement
   battleHandle = mountBattleView(viewport, battle, {
