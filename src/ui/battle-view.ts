@@ -9,13 +9,25 @@
 import { Battle } from '../engine/battle'
 import { takeUnitTurn } from '../engine/ai'
 import { ELEVATION_CRIT_PER_LEVEL } from '../engine/combat'
-import { boardHTML, unitPanelHTML, forecastHTML, logHTML, type ViewState } from './render'
+import type { Unit } from '../engine/types'
+import {
+  boardHTML,
+  unitPanelHTML,
+  forecastHTML,
+  logHTML,
+  tileTooltipHTML,
+  unitTooltipHTML,
+  type ViewState,
+  type UnitProgress,
+} from './render'
 
 export interface BattleViewOptions {
   /** Called when the player clicks Continue after the battle has concluded. */
   onEnd?: () => void
   /** Optional banner HTML shown at the left of the battle top bar. */
   headerHTML?: string
+  /** Live level/XP for a unit's tooltip; absent in the standalone sandbox. */
+  progressFor?: (unit: Unit) => UnitProgress | undefined
 }
 
 export interface BattleViewHandle {
@@ -37,14 +49,15 @@ export function mountBattleView(
         <button id="endBtn">End Turn ⏎</button>
         <button id="continueBtn" hidden>Continue →</button>
       </div>
+      <div id="tooltip" class="tooltip" hidden></div>
       <div class="battle-main">
         <div id="board"></div>
         <div id="sidebar">
           <div class="card"><h2>Selected</h2><div id="unitPanel"></div><div id="forecast"></div></div>
           <div class="card"><h2>Chronicle</h2><div id="log"></div></div>
           <div class="card"><h2>Legend</h2>
-            <div class="muted">A tile's corner number is its height. High ground:
-            +${ELEVATION_CRIT_PER_LEVEL}% crit per level when attacking from above (the higher tile wins).
+            <div class="muted">▲ high ground · ▾ low ground (hover any tile for exact height).
+            High ground: +${ELEVATION_CRIT_PER_LEVEL}% crit per level when attacking from above (the higher tile wins).
             Forest shields defenders; water &amp; crags block.
             Move (blue), then strike an enemy in range (red).
             Kills earn XP; a level-up evolves an elf mid-fight.</div>
@@ -62,6 +75,7 @@ export function mountBattleView(
   const logEl = q('#log')
   const endBtn = q<HTMLButtonElement>('#endBtn')
   const continueBtn = q<HTMLButtonElement>('#continueBtn')
+  const tooltipEl = q<HTMLDivElement>('#tooltip')
 
   boardEl.style.gridTemplateColumns = `repeat(${battle.state.grid.width}, var(--cell))`
 
@@ -128,6 +142,34 @@ export function mountBattleView(
     }
   }
 
+  // Floating hover tooltip: unit summary over a unit, terrain summary over bare
+  // ground. Content is read from live terrain/unit data (no hardcoding).
+  function showTooltip(x: number, y: number, clientX: number, clientY: number): void {
+    const { grid } = battle.state
+    const tile = grid.tiles[y * grid.width + x]
+    if (!tile) return hideTooltip()
+    const terrain = battle.content.terrain[tile.terrain]
+    const occ = battle.living().find((u) => u.pos.x === x && u.pos.y === y)
+    tooltipEl.innerHTML = occ
+      ? unitTooltipHTML(occ, { terrain, elevation: tile.elevation }, options.progressFor?.(occ))
+      : tileTooltipHTML(terrain, tile.elevation)
+    tooltipEl.hidden = false
+
+    // Offset from the cursor, flipping near the right/bottom edges.
+    const pad = 14
+    const r = tooltipEl.getBoundingClientRect()
+    let left = clientX + pad
+    let top = clientY + pad
+    if (left + r.width > window.innerWidth - 8) left = clientX - r.width - pad
+    if (top + r.height > window.innerHeight - 8) top = clientY - r.height - pad
+    tooltipEl.style.left = `${Math.max(4, left)}px`
+    tooltipEl.style.top = `${Math.max(4, top)}px`
+  }
+
+  function hideTooltip(): void {
+    tooltipEl.hidden = true
+  }
+
   async function endTurn(): Promise<void> {
     if (busy || battle.outcome !== 'ongoing') return
     clearSelection()
@@ -185,9 +227,19 @@ export function mountBattleView(
   }
   const onMove = (e: MouseEvent) => {
     const cell = (e.target as HTMLElement).closest('.cell') as HTMLElement | null
-    if (cell) onCellHover(Number(cell.dataset.x), Number(cell.dataset.y))
+    if (cell) {
+      const x = Number(cell.dataset.x)
+      const y = Number(cell.dataset.y)
+      onCellHover(x, y)
+      showTooltip(x, y, e.clientX, e.clientY)
+    } else {
+      hideTooltip()
+    }
   }
-  const onLeave = () => { forecastEl.innerHTML = '' }
+  const onLeave = () => {
+    forecastEl.innerHTML = ''
+    hideTooltip()
+  }
   const onKey = (e: KeyboardEvent) => {
     if (e.key === 'Enter' && !endBtn.disabled && !endBtn.hidden) void endTurn()
   }

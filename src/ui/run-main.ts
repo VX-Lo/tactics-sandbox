@@ -7,6 +7,7 @@ import './style.css'
 import { Run } from '../run/run'
 import { BIOMES } from '../run/biomes'
 import { DIFFICULTIES } from '../run/encounters'
+import { levelProgress } from '../run/progression'
 import { mountBattleView, type BattleViewHandle } from './battle-view'
 import { rosterHTML, endHTML } from './run-render'
 
@@ -44,6 +45,14 @@ function startBattle(index: number): void {
   const viewport = document.getElementById('viewport') as HTMLDivElement
   battleHandle = mountBattleView(viewport, battle, {
     headerHTML: header,
+    // Live level/XP for unit tooltips, read from the roster entry that owns
+    // this exact unit instance (updates as it evolves mid-battle).
+    progressFor: (unit) => {
+      const entry = run.roster.find((e) => e.unit === unit)
+      if (!entry) return undefined
+      const p = levelProgress(entry)
+      return { level: entry.level, into: p ? p.into : 0, span: p ? p.span : null }
+    },
     onEnd: () => {
       run.finishBattle()
       renderRun()
