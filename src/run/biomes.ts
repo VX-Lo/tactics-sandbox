@@ -25,12 +25,14 @@ export const BIOMES: Record<Biome, BiomeDef> = {
   marsh: {
     label: 'Mire',
     blurb: 'Waterlogged — pools split the field into channels.',
-    mapConfig: { ...base, waterLevel: 0.42, forestThreshold: 0.55, mountainLevel: 0.85 },
+    // Kept below map-fragmenting levels: more water than forest, but the board
+    // stays traversable so engagements can actually happen.
+    mapConfig: { ...base, waterLevel: 0.34, forestThreshold: 0.58, mountainLevel: 0.85 },
   },
   highland: {
     label: 'Highland',
     blurb: 'Rocky heights — sparse cover, elevation decides crits.',
-    mapConfig: { ...base, waterLevel: 0.2, forestThreshold: 0.72, mountainLevel: 0.66 },
+    mapConfig: { ...base, waterLevel: 0.22, forestThreshold: 0.72, mountainLevel: 0.75 },
   },
   plain: {
     label: 'Heath',
