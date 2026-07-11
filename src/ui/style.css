@@ -238,3 +238,25 @@ input { width: 70px; cursor: text; }
 .tooltip .tt-row { display: flex; justify-content: space-between; gap: 14px; }
 .tooltip .tt-sub { color: var(--ink-dim); font-weight: normal; }
 .tooltip .tt-abils { color: var(--accent); margin-top: 2px; }
+
+/* --- deployment screen --- */
+.deploy-card { cursor: pointer; transition: border-color 0.1s, background 0.1s; }
+.deploy-card:hover { border-color: var(--player); background: var(--panel-2); }
+.deploy-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.deploy-card.selected { border-color: var(--player); box-shadow: inset 0 0 0 1px var(--player); background: #26301f; }
+.deploy-badge {
+  margin-left: auto;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--ink-dim);
+  border: 1px solid #39424a;
+  border-radius: 10px;
+  padding: 1px 7px;
+}
+.deploy-badge.on { color: var(--bg); background: var(--player); border-color: var(--player); font-weight: bold; }
+.deploy-actions { display: flex; gap: 8px; margin: 0 0 10px; }
+#deployBtn { background: var(--player); color: var(--bg); border-color: var(--player); font-weight: bold; }
+#deployBtn:disabled { background: var(--panel-2); color: var(--ink-dim); border-color: #39424a; font-weight: normal; }
+button.ghost { background: transparent; }
+.deploy-hint { font-size: 12px; line-height: 1.5; }

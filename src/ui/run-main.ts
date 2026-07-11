@@ -9,11 +9,13 @@ import { BIOMES } from '../run/biomes'
 import { DIFFICULTIES } from '../run/encounters'
 import { levelProgress } from '../run/progression'
 import { mountBattleView, type BattleViewHandle } from './battle-view'
-import { rosterHTML, endHTML } from './run-render'
+import { rosterHTML, deployHTML, endHTML } from './run-render'
 
 const app = document.getElementById('app')!
 let run: Run
 let battleHandle: BattleViewHandle | null = null
+// Deployment selection, owned by the controller until deploy() commits it.
+let selected = new Set<string>()
 
 function startRun(seed: number): void {
   battleHandle?.destroy()
@@ -24,6 +26,7 @@ function startRun(seed: number): void {
 
 function renderRun(): void {
   if (run.phase === 'roster') renderRoster()
+  else if (run.phase === 'deploy') renderDeploy()
   else if (run.phase === 'won' || run.phase === 'lost') renderEnd()
 }
 
@@ -32,18 +35,46 @@ function renderRoster(): void {
   battleHandle = null
   app.innerHTML = rosterHTML(run)
   app.querySelectorAll<HTMLElement>('[data-encounter]').forEach((el) =>
-    el.addEventListener('click', () => startBattle(Number(el.dataset.encounter))),
+    el.addEventListener('click', () => {
+      run.chooseEncounter(Number(el.dataset.encounter))
+      selected = new Set() // start empty; the player must choose who fights
+      renderRun()
+    }),
   )
   wireChrome()
 }
 
-function startBattle(index: number): void {
-  const enc = run.encounters[index]
+function renderDeploy(): void {
+  app.innerHTML = deployHTML(run, selected)
+  const cap = run.maxDeployable()
+  const toggle = (id: string): void => {
+    if (selected.has(id)) selected.delete(id)
+    else if (selected.size < cap) selected.add(id) // cap enforced on the way in
+    renderDeploy()
+  }
+  app.querySelectorAll<HTMLElement>('[data-deploy-toggle]').forEach((el) => {
+    el.addEventListener('click', () => toggle(el.dataset.deployToggle!))
+    el.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault()
+        toggle(el.dataset.deployToggle!)
+      }
+    })
+  })
+  document.getElementById('deployBtn')?.addEventListener('click', () => {
+    if (selected.size >= 1 && selected.size <= cap) enterBattle([...selected])
+  })
+  document.getElementById('backBtn')?.addEventListener('click', () => {
+    run.cancelDeploy()
+    renderRun()
+  })
+  wireChrome()
+}
+
+function enterBattle(ids: string[]): void {
+  const enc = run.pendingEncounter!
   const header = `<strong>Battle ${run.battleIndex + 1}/${run.totalBattles}</strong> — ${BIOMES[enc.biome].label} · ${DIFFICULTIES[enc.difficulty].label}`
-  // Interim: auto-field the first `cap` units. The deployment screen replaces
-  // this in the next commit.
-  run.chooseEncounter(index)
-  const battle = run.deploy(run.roster.slice(0, run.maxDeployable()).map((e) => e.unit.id))
+  const battle = run.deploy(ids)
   app.innerHTML = '<div id="viewport"></div>'
   const viewport = document.getElementById('viewport') as HTMLDivElement
   battleHandle = mountBattleView(viewport, battle, {
