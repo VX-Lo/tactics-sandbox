@@ -15,6 +15,7 @@ import type {
   Unit,
   UnitDef,
 } from './types'
+import { DEFAULT_TIER, TIERS } from './types'
 
 import terrainJson from '../../data/terrain.json'
 import abilitiesJson from '../../data/abilities.json'
@@ -99,7 +100,7 @@ function parseUnit(raw: unknown, abilities: Record<string, AbilityDef>): UnitDef
   req(typeof u.name === 'string', `unit "${u.id}" missing name`)
   req(typeof u.glyph === 'string', `unit "${u.id}" missing glyph`)
   req(u.faction === 'player' || u.faction === 'enemy', `unit "${u.id}" bad faction`)
-  req(u.tier === undefined || u.tier === 'named' || u.tier === 'unnamed',
+  req(u.tier === undefined || (TIERS as readonly string[]).includes(u.tier as string),
     `unit "${u.id}" bad tier "${String(u.tier)}"`)
   req(isObj(u.stats), `unit "${u.id}" missing stats`)
   const s = u.stats as Record<string, unknown>
@@ -111,6 +112,8 @@ function parseUnit(raw: unknown, abilities: Record<string, AbilityDef>): UnitDef
   const at = u.attack as Record<string, unknown>
   for (const k of ['minRange', 'maxRange', 'hit', 'crit'] as const)
     req(typeof at[k] === 'number', `unit "${u.id}" missing attack.${k}`)
+  req(u.attackBudget === undefined || (typeof u.attackBudget === 'number' && u.attackBudget >= 1),
+    `unit "${u.id}" bad attackBudget "${String(u.attackBudget)}"`)
   req(Array.isArray(u.abilities), `unit "${u.id}" missing abilities array`)
   for (const id of u.abilities as unknown[])
     req(typeof id === 'string' && id in abilities,
@@ -150,7 +153,7 @@ export function instantiateUnit(content: Content, defId: string, instanceId: str
     defId: def.id,
     name: def.name,
     faction: def.faction,
-    tier: def.tier ?? 'unnamed',
+    tier: def.tier ?? DEFAULT_TIER,
     glyph: def.glyph,
     stats: { ...def.stats },
     hp: def.stats.maxHp,
@@ -158,9 +161,13 @@ export function instantiateUnit(content: Content, defId: string, instanceId: str
     movement: { points: def.movement.points, ...(def.movement.terrainCosts
       ? { terrainCosts: { ...def.movement.terrainCosts } } : {}) },
     attack: { ...def.attack },
+    attackBudget: def.attackBudget ?? 1,
     abilities: def.abilities.map((id) => content.abilities[id]),
-    hasMoved: false,
-    hasActed: false,
+    // Action budgets start full; beginPhase resets them each turn. Movement in
+    // points, one attack by default. Ordering is free (see Unit).
+    movementRemaining: def.movement.points,
+    attacksRemaining: def.attackBudget ?? 1,
+    spent: false,
     alive: true,
     kills: 0,
   }

@@ -70,7 +70,9 @@ export function reachable(state: BattleState, content: Content, unit: Unit): Rea
       const occ = occupantAt(state, nb.x, nb.y)
       if (occ && occ.faction !== unit.faction) continue // enemy blocks entry and passage
       const nc = curCost + moveCostFor(unit, terrain.id, terrain.moveCost)
-      if (nc > unit.movement.points) continue
+      // Cap by the budget the unit has LEFT this activation, not its full total,
+      // so reachability shrinks as movement is spent (supports multiple moves).
+      if (nc > unit.movementRemaining) continue
       const nk = key(nb.x, nb.y)
       const existing = costs.get(nk)
       if (existing === undefined || nc < existing) {

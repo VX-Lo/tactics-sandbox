@@ -34,9 +34,13 @@ function nearestEnemy(battle: Battle, unit: Unit): Unit | undefined {
   return best
 }
 
-/** Execute one unit's whole turn (move and/or attack). Returns true if it acted. */
+/** Execute one unit's whole turn (move and/or attack). Returns true if it acted.
+ *  The greedy policy takes at most one move + one attack, then ENDS the unit's
+ *  activation (waitUnit) — it deliberately does NOT use the new move-after-attack
+ *  freedom, so enemy trajectories (and every downstream replay) stay identical to
+ *  the pre-economy engine. That freedom exists only for the human player. */
 export function takeUnitTurn(battle: Battle, unit: Unit): boolean {
-  if (!unit.alive || unit.hasActed) return false
+  if (!unit.alive || unit.spent) return false
 
   const enemies = battle
     .living()
@@ -57,6 +61,7 @@ export function takeUnitTurn(battle: Battle, unit: Unit): boolean {
     if (spot) {
       if (!(spot.x === unit.pos.x && spot.y === unit.pos.y)) battle.moveUnit(unit.id, spot)
       battle.attack(unit.id, enemy.id)
+      battle.waitUnit(unit.id) // one activation only; no AI hit-and-run (safe no-op if the battle ended)
       return true
     }
   }
@@ -75,6 +80,7 @@ export function takeUnitTurn(battle: Battle, unit: Unit): boolean {
   }
   if (best) {
     battle.moveUnit(unit.id, best)
+    battle.waitUnit(unit.id) // done for the phase after its single step
     return true
   }
   battle.waitUnit(unit.id)
@@ -93,7 +99,7 @@ export function playPhase(battle: Battle): boolean {
   let acted = false
   for (const id of ids) {
     const u = battle.unitById(id)
-    if (u && u.alive && !u.hasActed && takeUnitTurn(battle, u)) acted = true
+    if (u && u.alive && !u.spent && takeUnitTurn(battle, u)) acted = true
   }
   battle.endPhase()
   return acted

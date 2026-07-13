@@ -10,6 +10,7 @@ export default defineConfig({
       input: {
         main: 'index.html',
         battle: 'battle.html',
+        campaign: 'campaign.html',
       },
     },
   },

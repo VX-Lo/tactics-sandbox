@@ -6,6 +6,7 @@
 import type { Battle } from '../engine/battle'
 import type { Forecast } from '../engine/combat'
 import type { LogEntry, TerrainDef, Unit } from '../engine/types'
+import { TIER_LABELS } from '../engine/types'
 
 export interface ViewState {
   selectedId: string | null
@@ -39,7 +40,7 @@ export function boardHTML(battle: Battle, view: ViewState): string {
 
       const clickable =
         view.destinations.has(key) ||
-        (occ && (view.attackable.has(occ.id) || (occ.faction === 'player' && !occ.hasActed)))
+        (occ && (view.attackable.has(occ.id) || (occ.faction === 'player' && !occ.spent)))
       if (clickable) classes.push('clickable')
 
       let inner = ''
@@ -52,7 +53,7 @@ export function boardHTML(battle: Battle, view: ViewState): string {
         inner += `<span class="elev-mark ${hi ? 'hi' : 'lo'}" aria-hidden="true">${hi ? '▲' : '▾'}</span>`
       }
       if (occ) {
-        const spent = occ.faction === 'player' && occ.hasActed ? ' spent' : ''
+        const spent = occ.faction === 'player' && occ.spent ? ' spent' : ''
         inner += `<span class="glyph ${occ.faction}${spent}">${esc(occ.glyph)}</span>`
         const pct = Math.max(0, Math.round((occ.hp / occ.stats.maxHp) * 100))
         const low = occ.hp / occ.stats.maxHp <= 0.34 ? ' low' : ''
@@ -71,9 +72,15 @@ export function unitPanelHTML(unit: Unit | undefined): string {
   const abilities = unit.abilities
     .map((a) => `<li><span class="ab-name">${esc(a.name)}</span> <span class="muted">— ${esc(a.description ?? '')}</span></li>`)
     .join('')
+  // Live per-activation budgets (the action economy). Reads roll back visibly on
+  // undo once that lands; for now they fall as the unit moves/attacks.
+  const econ = unit.spent
+    ? '<span class="done">activation spent</span>'
+    : `Move <b>${unit.movementRemaining}</b>/${unit.movement.points} · Attacks <b>${unit.attacksRemaining}</b>/${unit.attackBudget}`
   return `
     <div class="unit-name ${unit.faction}">${esc(unit.name)} <span class="muted">${esc(unit.glyph)}</span></div>
     <div class="muted">${unit.faction === 'player' ? 'Elf of the Deepwood' : 'Undead'} · ${unit.kills} kill${unit.kills === 1 ? '' : 's'}</div>
+    <div class="econ">${econ}</div>
     <div class="stats">
       <div><span class="k">HP</span> ${unit.hp}/${s.maxHp}</div>
       <div><span class="k">Move</span> ${unit.movement.points}</div>
@@ -141,7 +148,7 @@ export function unitTooltipHTML(
   progress?: UnitProgress,
 ): string {
   const s = unit.stats
-  const tier = unit.tier === 'named' ? 'Named' : 'Unnamed'
+  const tier = TIER_LABELS[unit.tier]
   const level = progress
     ? `Lv ${progress.level} · ${progress.span === null ? 'MAX' : `${progress.into}/${progress.span} XP`}`
     : ''

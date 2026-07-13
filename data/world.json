@@ -1,0 +1,60 @@
+{
+  "_note": "Campaign world definition: the strategic node-graph map. Settlements are ownable (defense = static difficulty of taking the place, NOT a garrison economy); waypoints are neutral junctions. Edge cost = travel time. x/y in [0,1] are layout only. Owners: player | neutral | a faction id. Exactly one party ROAMS (the blight warband); static factions may only OWN. Each party's `roster` seeds the economy's stub roster (see src/campaign/economy.ts) — upkeep tiers only, no stats.",
+  "factions": [
+    { "id": "player", "name": "Deepwood Elves", "color": "#8fe38f" },
+    { "id": "blight", "name": "The Blight", "color": "#c77dff" },
+    { "id": "neutral", "name": "Free Holds", "color": "#9aa0a6" }
+  ],
+  "nodes": [
+    { "id": "deepwood", "name": "Deepwood", "kind": "settlement", "owner": "player", "defense": 12, "x": 0.10, "y": 0.50 },
+    { "id": "crossbrook", "name": "Crossbrook", "kind": "waypoint", "x": 0.27, "y": 0.50 },
+    { "id": "rootholm", "name": "Rootholm", "kind": "settlement", "owner": "neutral", "defense": 5, "x": 0.31, "y": 0.26 },
+    { "id": "mistgrove", "name": "Mistgrove", "kind": "settlement", "owner": "neutral", "defense": 6, "x": 0.33, "y": 0.74 },
+    { "id": "thornwall", "name": "Thornwall", "kind": "settlement", "owner": "neutral", "defense": 7, "x": 0.50, "y": 0.16 },
+    { "id": "ashfen", "name": "Ashfen", "kind": "settlement", "owner": "neutral", "defense": 6, "x": 0.52, "y": 0.84 },
+    { "id": "fenpath", "name": "Fenpath", "kind": "waypoint", "x": 0.50, "y": 0.50 },
+    { "id": "graymoor", "name": "Graymoor", "kind": "settlement", "owner": "neutral", "defense": 8, "x": 0.70, "y": 0.33 },
+    { "id": "hollowfen", "name": "Hollowfen", "kind": "settlement", "owner": "neutral", "defense": 7, "x": 0.72, "y": 0.67 },
+    { "id": "highpass", "name": "Highpass", "kind": "waypoint", "x": 0.72, "y": 0.50 },
+    { "id": "blightspire", "name": "Blightspire", "kind": "settlement", "owner": "blight", "defense": 12, "x": 0.90, "y": 0.50 }
+  ],
+  "edges": [
+    { "a": "deepwood", "b": "crossbrook", "cost": 2 },
+    { "a": "crossbrook", "b": "rootholm", "cost": 1 },
+    { "a": "crossbrook", "b": "mistgrove", "cost": 1 },
+    { "a": "crossbrook", "b": "fenpath", "cost": 2 },
+    { "a": "rootholm", "b": "thornwall", "cost": 2 },
+    { "a": "mistgrove", "b": "ashfen", "cost": 2 },
+    { "a": "thornwall", "b": "fenpath", "cost": 2 },
+    { "a": "ashfen", "b": "fenpath", "cost": 2 },
+    { "a": "thornwall", "b": "graymoor", "cost": 2 },
+    { "a": "ashfen", "b": "hollowfen", "cost": 2 },
+    { "a": "fenpath", "b": "highpass", "cost": 2 },
+    { "a": "graymoor", "b": "highpass", "cost": 1 },
+    { "a": "hollowfen", "b": "highpass", "cost": 1 },
+    { "a": "graymoor", "b": "hollowfen", "cost": 3 },
+    { "a": "highpass", "b": "blightspire", "cost": 2 }
+  ],
+  "parties": [
+    {
+      "id": "player", "faction": "player", "start": "deepwood", "strength": 10,
+      "roster": [
+        { "id": "levy-1", "tier": "levy" },
+        { "id": "levy-2", "tier": "levy" },
+        { "id": "levy-3", "tier": "levy" },
+        { "id": "support-1", "tier": "supporting" },
+        { "id": "named-1", "tier": "named" },
+        { "id": "named-2", "tier": "named" }
+      ]
+    },
+    {
+      "id": "blight-warband", "faction": "blight", "start": "blightspire", "strength": 9,
+      "roster": [
+        { "id": "blight-levy-1", "tier": "levy" },
+        { "id": "blight-levy-2", "tier": "levy" },
+        { "id": "blight-support-1", "tier": "supporting" },
+        { "id": "blight-named-1", "tier": "named" }
+      ]
+    }
+  ]
+}

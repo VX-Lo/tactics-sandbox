@@ -32,11 +32,12 @@ function unitCardHTML(entry: RosterEntry): string {
       <div class="uc-head">
         <span class="glyph player">${esc(u.glyph)}</span>
         <span class="unit-name player">${esc(u.name)}</span>
+        ${u.tier === 'levy' ? '<span class="tier-tag levy">Levy</span>' : ''}
         <span class="level">Lv ${entry.level}</span>
       </div>
       <div class="xpbar" title="${xpText}"><span style="width:${pct}%"></span></div>
       <div class="uc-stats muted">
-        HP ${s.maxHp} · Atk ${s.atk} · Def ${s.def} · Spd ${s.spd} · ${u.kills} kills
+        <span class="${u.hp < s.maxHp ? 'wounded' : ''}">HP ${u.hp}/${s.maxHp}</span> · Atk ${s.atk} · Def ${s.def} · Spd ${s.spd} · ${u.kills} kills
       </div>
       <ul class="abilities">${abilityList(entry)}</ul>
     </div>`
@@ -56,11 +57,12 @@ function deployCardHTML(entry: RosterEntry, selected: boolean): string {
       <div class="uc-head">
         <span class="glyph player">${esc(u.glyph)}</span>
         <span class="unit-name player">${esc(u.name)}</span>
+        ${u.tier === 'levy' ? '<span class="tier-tag levy">Levy</span>' : ''}
         <span class="level">Lv ${entry.level}</span>
         ${badge}
       </div>
       <div class="xpbar"><span style="width:${pct}%"></span></div>
-      <div class="uc-stats muted">HP ${s.maxHp} · Atk ${s.atk} · Def ${s.def} · Spd ${s.spd}</div>
+      <div class="uc-stats muted"><span class="${u.hp < s.maxHp ? 'wounded' : ''}">HP ${u.hp}/${s.maxHp}</span> · Atk ${s.atk} · Def ${s.def} · Spd ${s.spd}</div>
       <ul class="abilities">${abilityList(entry)}</ul>
     </div>`
 }

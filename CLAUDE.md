@@ -1,164 +1,210 @@
-# CLAUDE.md — agent contract for tactics-sandbox
+# CLAUDE.md — cold-boot manifest
 
-This is the brief a fresh session reads **before touching anything**. It is the
-authoritative source for architecture and constraints; `README.md` is
-human-facing (what it is, how to run it), this is agent-facing (the rules and
-why). When the two disagree, the **code wins** — fix the doc.
+You are working on a video game. This file is written so a FRESH instance with zero
+prior context can boot correct. Read it fully before doing anything. If a task
+contradicts this file, stop and flag it.
 
-**This is a living document.** Whenever the human says "update CLAUDE.md," revise
-it to match what changed: new sanctioned vocabulary, new systems, shifted
-next-steps, new known issues. Keep it tight and durable — rules and their
-rationale, never a changelog. Prune anything that has gone stale.
+============================================================
+## 0. WHAT THIS IS (read this first, it changes every decision)
+============================================================
+- A single-player, 2D, turn-based tactics game that SCALES, in feel, like
+  Mount & Blade: Warband and X4: Foundations: emergent sandbox conquest through
+  tactics instead of real-time 3D combat. The tactics grid is the combat RESOLVER,
+  not the game. The game is the world you conquer with it.
+- NORTH STAR: the fantasy of being a nobody whose personal TACTICAL skill (not reflex,
+  not RNG, not narrative privilege) legibly overcomes bad odds — "send fifty men just
+  to kill me." Outcomes come from skill and system.
+- NOT a scripted, chosen-one, Fire-Emblem-story game. Story is emergent.
+- IT IS A GAME FOR ONE PERSON. Not a product, not a team codebase, not AAA.
+- BUG BAR IS "FINAL FANTASY 1", NOT "ENTERPRISE". FF1 shipped famously buggy and is a
+  classic. A bug the player will notice in play and fix in one sentence is CHEAP.
+  Do NOT spend effort/tokens on enterprise-grade defensiveness, exhaustive edge-case
+  armor, or belt-and-suspenders verification. Prefer shipping the feature and its
+  flavor over proving it correct. Optimize for "works and feels right," not "provably
+  safe." (EXCEPTIONS: the non-negotiables in section 1 — those DO earn rigor.)
+- Runs on potato hardware. Offline-first. No heavy dependencies. Moddable data files.
+  Target: the finished game is small (aim < 1 GB). The player's PC storage/CPU is free.
 
----
+============================================================
+## 1. NON-NEGOTIABLES (the load-bearing walls — these earn full rigor)
+============================================================
+These are the few things that are expensive to get wrong. Guard them.
 
-## Current state / Next up
+1a. THE VARIANCE RULE.
+    Luck may change HOW MUCH the player wins a fight by — never WHETHER they win it —
+    unless the player exposed themselves to that risk. A resolved outcome the player
+    walked into by their own choice (deploying/positioning a unit into danger) is fair
+    game; a coin-flip that decides a fight the player didn't gamble on is a violation.
 
-- **Shipped:** deterministic tactics engine; data-driven units + event→effect
-  abilities; FE-style combat with height-advantage crits; a run layer (roster,
-  XP/level, live mid-battle evolution, permadeath, encounter choice); and
-  **deployment choice** (roster > field cap; pick who fights each battle).
-- **Likely next system:** the **promotion / third `supporting` tier** (unnamed
-  units that distinguish themselves earn a name and graduate). See Deferred —
-  don't start it until asked.
+1b. DETERMINISM IS SACRED — and here is EXACTLY where and why.
+    - All randomness flows through a seeded PRNG. Math.random is BANNED. No wall-clock.
+    - A run/campaign replays BYTE-IDENTICALLY from seed + player choices.
+    - The seed is RANDOM per run, but MUST be captured and recorded into run/campaign
+      state at start (never generated-and-discarded). The player or a task may override
+      it. A replay is worthless without its seed.
+    - WHY: this enables the overnight AI-vs-AI balance sim (section 5) — replacing
+      expensive human playtesting with a free machine process. This is the single
+      biggest force-multiplier available; determinism is what buys it. Protect it.
+    - Determinism must NEVER be something the player notices as stiffness. It's an
+      engine property, not a gameplay feel.
 
-## North star (design intent)
+1c. SCALING-BLEND.
+    The game grows by altitude (party -> army -> empire) but systems BLEND across
+    scale; they are never TAKEN AWAY as the player grows. Late-game, the player can
+    still "pilot the small ship" — hand-fight a battle even while commanding armies.
+    The auto-resolve vs. hand-fight CHOICE is the blend made mechanical (section 3).
 
-A single-player **sandbox**: "Warband/X4-style emergent conquest, expressed
-through turn-based tactics instead of real-time combat" — **not** a scripted Fire
-Emblem campaign. Build small (roguelike-run length) now, then scale toward a
-persistent world. Every system should be judged by whether it serves emergent,
-replayable play, not authored set-pieces.
+============================================================
+## 2. ARCHITECTURE & MODULE BOUNDARIES
+============================================================
+- Three layers, kept separate:
+  1. TACTICS ENGINE — the deterministic battle grid (units, movement, attacks).
+  2. RUN LAYER — XP, permadeath, deployment, promotion, recovery, names.
+  3. CAMPAIGN LAYER — the strategic world map (nodes, ownership, agents, time).
+- The campaign layer imports NOTHING from tactics internals. Their ONLY connection is
+  the resolveBattle seam (section 3).
+- Changing a module boundary or a cross-layer interface is an OPUS-level change.
 
-Attachment is meant to be **tiered, X4-style**: protagonists you mourn,
-supporting units that hurt to lose, levy you spend. That is what the tier system
-(below) exists to serve.
+============================================================
+## 3. resolveBattle — THE SOCKET (most important seam in the project)
+============================================================
+- Signature: resolveBattle(attacker, defender, seed) -> outcome
+  (outcome returns at minimum: winner, and strength/casualty deltas for each side).
+- This is the ONLY interface between the campaign layer and combat.
+- CURRENTLY a deterministic PLACEHOLDER auto-resolver. It MUST honor the variance rule:
+  the STRONGER force always wins; the seed decides only the MARGIN (losses on each side),
+  never the winner. Equal strength is the sole case the seed may decide.
+- The real tactics engine will LATER implement this same interface under the same
+  contract. Wiring it in is a separate, dedicated (Opus) session. Until then, treat the
+  placeholder like the strategic layer's "heal-to-full" stand-in: fine to build on.
 
----
+============================================================
+## 4. CORE SYSTEM VOCABULARY
+============================================================
+- ATTACHMENT TIERS: levy (unnamed, spent) -> named (mourned). A middle "supporting"
+  tier is structured-for but may not be built. Tier order lives in one table so tiers
+  insert additively. The CAMPAIGN economy (below) has now built the supporting tier's
+  MIA-state mechanic on its own stub roster — see section 7; the run/tactics-layer
+  `Tier` union (engine/types.ts) is still just levy|named, untouched this pass.
+- CAMPAIGN ECONOMY: two resources — Scrip (funds expansion, also the unit of named-tier
+  debt) and Stores (funds upkeep). Flat per-settlement income (data/economy.json),
+  summed identically regardless of node count. Every roster unit (deployed + benched)
+  costs Stores/tick; a shortfall is paid highest-tier-first (named -> supporting ->
+  levy) so it bites the levies first: levy lost permanently, supporting goes MIA
+  (auto-returns after a fixed tick count — placeholder, not precious), named racks up
+  interest-bearing Scrip debt and goes non-deployable until it auto-clears. Capturing a
+  node costs a flat Scrip amount, gated up front (no seed drawn if unaffordable). The
+  rival runs the identical accumulation function (no fudged numbers) and gates its own
+  expansion on a small threshold + reaction-lag policy (economy.rivalExpandDecision) —
+  pay upkeep first, hold until surplus clears the bar and the lag ticks by, then act.
+- PROMOTION = IDENTITY GENESIS. Automatic on an earned trigger (never a manual button;
+  the system anoints, the player does not). Current trigger: a levy that took real
+  punishment and survived (an HP-watermark downward-crossing this battle). Promotion is
+  IDENTITY-ONLY — a name + tier change, NO stat/ability divergence (that's deferred).
+- NAMES: drawn from culture-keyed flat pools at names/{species}_{gender}.txt (one name
+  per line). Each pool shuffled with an INDEPENDENT sub-seed (hash of run_seed + pool key)
+  so adding pools later never perturbs existing pools' draw order. Pool files + contents
+  + order are part of the replay contract. Register: humans = meaningful mixed-origin
+  names (Katherine, Naomi...); elves/wilden = Japanese names. Only feminine elves exist
+  now; structure supports more species/genders without a rewrite.
+- ACTION ECONOMY: per-turn budgets — movementRemaining, attacksRemaining
+  (attackBudget default 1). Free ordering: move/attack interleave in any order until
+  budgets spent or the unit waits. Move-after-attack is allowed.
+- UNDO (if present / when built): intra-unit only, via a single named "commit on reveal"
+  policy. An action COMMITS (clears undo) iff it resolves RNG or reveals hidden info —
+  attacks commit, moves are reversible. Undo is authoring-time only; undone actions are
+  NEVER written to the replay record (which stores committed actions only). This exists
+  partly to protect the variance rule (no re-rolling a resolved attack).
+- WOUNDS/RECOVERY: "wounded" = current HP not yet recovered to max (no separate status
+  or stat). Units recover a fixed fraction of max HP per encounter (deployed AND benched).
+  maxHP is never reduced. Wounded units stay deployable — fielding one is a risk the
+  player owns.
+- SETTING (Actium): floating-island continent; three races (human, elf, wilden);
+  ~9:1 female:male population; 1980s-level tech, pre-WWII weapons, heavy radio aesthetic;
+  enemies include mechs and lycel (fungal mimics) plus humanoids. Norodael = a small,
+  mostly-abandoned frontier region (the "nobody's" starting backwater).
 
-## Core architecture — non-negotiables
+============================================================
+## 5. THE OVERNIGHT SIM (why determinism matters — planned, not shelved)
+============================================================
+A headless, no-render harness that runs thousands of seeded battles/campaigns to
+completion and reports win-rates + outliers. It converts human playtesting into a free
+overnight process and is the payoff of section 1b. Prerequisites: an AI that actually
+uses the action economy, tactics wired into resolveBattle, seeds recorded to state.
 
-### 1. Units are data, not code
-A unit is stats + movement + a list of `{trigger, condition?, effect}` abilities.
-The ability dispatcher (`src/engine/abilities.ts`) matches an event's trigger and
-runs **effect-primitives looked up in a `type → handler` registry**. It **never
-switches over specific ability names**. Authoring an ability = composing existing
-primitives in JSON (`data/abilities.json`), no engine change.
+============================================================
+## 6. BUILD CONVENTIONS (how to work here efficiently)
+============================================================
+- TOKENS ARE THE BINDING CONSTRAINT. The player has a hard monthly/5-hour budget shared
+  across all Claude usage. Every token spent here is one they can't spend elsewhere.
+  Be concise. Don't re-derive this file. Don't over-explain.
+- ASSUME COLD BOOT. Every prompt may come from a fresh instance. This file is your
+  catch-up. Don't assume prior-conversation context.
+- BATCH BY FEATURE-CLUSTER, not one-variable-at-a-time. Related systems that share
+  context should be built together in one pass (shared setup, one test pass, no
+  re-briefing). The old one-system-per-session rule is RETIRED for routine work; keep
+  coherence via THIS file, not via tiny isolated steps.
+- MODEL ROUTING (right-size to risk, not to ambition):
+    Use the CHEAPER model by default. Reserve the expensive model for changes that are
+    expensive to UNWIND, not merely expensive to make:
+      * module boundaries / cross-layer interfaces (e.g. resolveBattle),
+      * the determinism contract (seeds, replay, PRNG plumbing),
+      * anything many files depend on.
+    Test: "if this is subtly wrong, do I fix it in one sentence in play, or does it
+    silently corrupt other systems?" One-sentence-fix -> cheap model. Silent corruption
+    -> expensive model.
+- WHEN IN DOUBT ABOUT A NON-NEGOTIABLE, STOP AND FLAG rather than proceeding. (This is
+  the one place caution beats speed.) Everywhere else, prefer shipping.
+- ALWAYS UPDATE THIS FILE at the end of a session: record what shipped, new seams,
+  new deferrals. This file staying current is what makes cold boots cheap.
 
-### 2. The fixed vocabulary is triggers + effect-primitives
-These are the engine's bounded, deliberate vocabulary. As they exist in code now:
+============================================================
+## 7. CURRENT STATE  <<< KEEP IN SYNC — RECONCILE, DO NOT CLOBBER >>>
+============================================================
+NOTE: If the repo's existing state notes disagree with this section, the REPO is
+authoritative for shipped-state. Update this section from reality; don't overwrite
+accurate state with stale assumptions.
 
-- **Triggers:** `on_gain`, `on_kill`, `on_move`, `on_turn_start`, `on_attack`,
-  `on_take_damage`, `on_adjacent`, `on_level_up`.
-- **Effect primitives:** `modify_stat`, `heal`, `heal_allies`, `append_epithet`,
-  `grant_random_ability`.
-- **Conditions:** `on_terrain`.
+Believed shipped:
+- Tactics engine; run layer (XP, permadeath).
+- Deployment (roster > field cap; benched earn no XP).
+- Promotion (levy -> named, HP-watermark trigger, identity-only) + name pools
+  (names/elf_female.txt, culture-keyed, independent per-pool seeding).
+- Wounds/recovery (gradual recovery replaced heal-to-full; promotion crossing fix).
+- Budget action economy (movementRemaining/attacksRemaining, free ordering,
+  move-after-attack, attackBudget default 1).
+- Strategic skeleton (campaign module: node-graph world, settlement ownership,
+  one roaming rival, resolveBattle placeholder honoring the variance rule).
+- Unit inspection panel (read-only).
+- Campaign economy (src/campaign/economy.ts): Scrip/Stores accumulation, flat
+  per-node income with seeded jitter, roster upkeep with tiered failure, capture-cost
+  gate, and the rival's threshold+reaction-lag spending policy. Supporting middle tier
+  — narrowly: only its MIA-state upkeep-failure mechanic exists on the campaign's own
+  stub roster (economy.RosterUnitStub); no stat/ability divergence for the tier
+  anywhere, and the run-layer `Tier` union is untouched (see section 4). Data:
+  data/economy.json (upkeep costs, node base yield, rival policy thresholds, MIA
+  return duration); data/world.json parties gained an optional `roster` field that
+  seeds it.
 
-Adding a new trigger/primitive/field is a rare **"additive vocabulary"** change:
-a new registry entry or enum value, composable and backward-compatible. Sanctioned
-examples so far: `on_level_up`, the `tier` field, `heal_allies`, and the
-run-agnostic `playerUnits` injection option on `Battle`.
+In flight / uncertain — VERIFY against repo before building on:
+- Intra-unit undo (commit-on-reveal) — drafted; confirm whether it shipped.
+- Random-seed-recorded-to-state — confirm implemented.
+- NEEDS A KANAME PASS: the campaign<->run-layer roster contract. economy.ts's
+  `RosterPort` is a deliberate stub (in-memory, seeded from data/world.json, swappable
+  via CampaignOptions.rosterPort) standing in for reading a unit's real tier and
+  mutating real run-layer roster state (remove/MIA/debt). It works and is tested, but
+  the real contract — how the campaign layer actually reaches roster units that live in
+  the run layer without violating "campaign imports nothing from tactics internals" —
+  is not designed. Do not extend the stub into that contract; design it fresh.
 
-**Changing engine _rules logic_ (movement, combat resolution, ability dispatch,
-turn flow) is a different, heavier act. Flag it to the human before doing it —
-never silently.** If a task turns out to need a rules change, stop and say so.
-
-### 3. Clean seams / module boundaries (as they actually are)
-```
-src/engine/   the fixed engine — ZERO DOM imports, ignorant of the run layer
-  rng          single seeded PRNG (mulberry32); the determinism spine
-  types        shared data vocabulary (triggers, effects, Unit, Tier, ...)
-  events       synchronous event bus
-  grid, mapgen terrain: geometry + deterministic noise/feature generation
-  content      JSON load/validate + unit instantiation
-  movement     reachability / pathing / occupancy (pure)
-  combat       FE-style round resolution + non-random forecast
-  abilities    the event→effect executor (the primitive registry)
-  battle       the integrator: turns, commands, win/loss, wiring
-  ai           a small deterministic greedy policy — a *player* of the engine,
-               not part of its rules (drives enemies; auto-plays battles in tests)
-
-src/run/      the run layer — sits ABOVE the engine, drives it via public API only
-  content      run's content variant (elves evolve on level-up, not on kill)
-  biomes       named MapGenConfig presets
-  encounters   deterministic candidate generation + XP scaling
-  progression  XP thresholds + level math (pure)
-  run          run state machine: roster, encounters, deployment, permadeath
-
-src/ui/       presentation only, downstream of engine + run; computes no rules
-  render, battle-view, run-render, main (battle.html), run-main (index.html)
-```
-The battle engine never learns what a run, XP, or an encounter is. The run
-orchestrates battles through `Battle`'s public command API + event bus, owns
-XP/level/deployment, injects chosen units via `playerUnits`, and fires
-`on_level_up` through **its own** ability-system instance against the shared unit
-object. Do not make the engine reach up into the run, or the run reach into
-engine internals.
-
-### 4. Determinism is non-negotiable
-- All randomness routes through the single seeded PRNG (`src/engine/rng.ts`).
-  **`Math.random` is banned in engine code.** (The only allowed use is the UI
-  picking *which* seed to play — i.e. choosing which deterministic run to run —
-  in `src/ui/*main.ts`.)
-- A run must **replay byte-identically** given the same **seed + encounter
-  choices + deployment picks**. The run derives two independent streams
-  (`encounterRng`, `progressionRng`) from the seed; deployment picks are recorded
-  (`deploymentHistory`) and injected in canonical roster order (not click order).
-- **Why it matters:** it makes the engine testable now (`test/run.test.ts`,
-  `test/battle.test.ts` assert identical replays) and **mass-simulable later** —
-  overnight AI-vs-AI balance runs are a planned use. Never introduce nondeterminism
-  (wall-clock, unseeded RNG, iteration-order dependence on hashing, async races).
-
----
-
-## The tier system
-
-`Tier = 'named' | 'unnamed'` today (on unit data; the engine never branches on it
-— only the run layer and presentation do). Planned: a third **`supporting`** tier
-plus a **promotion** mechanic (unnamed units that distinguish themselves earn a
-name and graduate). The union is intentionally left open for this. Tier is the
-mechanism behind tiered attachment (mourn / hurts-to-lose / spendable).
-
-## Deferred features — do NOT build early by accident
-
-Only build these when explicitly asked:
-- Promotion / the third `supporting` tier
-- LLM name generation
-- Wound / recovery economy (**heal-to-full between battles is a placeholder** for
-  this — see Known issues)
-- Recruitment / gaining new units
-- Shops / economy
-- Persistent world map
-
----
-
-## Working conventions
-
-**Model per task** (match effort to blast radius):
-- **Opus / High** — anything touching engine *shape* or adding a system.
-- **Opus / Max** — reserved for changes that must stay coherent across the whole
-  engine at once.
-- **Sonnet / High** — content, data, and isolated diffs.
-- If a task you're on turns out to need engine-wide coherence, **ask the human
-  before proceeding** rather than pushing on at the wrong tier.
-
-**Git:** commit per logical unit of work with specific messages (what changed and
-why); **push working states only**, never broken intermediates.
-
-**Verify before committing:** `npm run typecheck && npm test` must be green.
-Requires **Node 18+**; if `node` resolves to an older version (nvm can shadow the
-system binary), use the system Node 18 explicitly.
-
----
-
-## Known issues — carry forward, do NOT "fix" unprompted
-
-- **Stalemate edge.** Forces isolated by impassable terrain (e.g. water) can bog
-  down with no closer. The driver (`ai.autoPlay`) stops on a no-progress round and
-  `run.finishBattle` treats an unresolved battle as a draw (no reward, deaths still
-  counted, run advances). The **interactive UI has no stalemate escape** (Continue
-  only appears on a decided outcome). This is deliberately unhandled — noted here
-  so it isn't "discovered" and refactored without context. Raise it before changing.
-- **Heal-to-full between battles is a deliberate placeholder** pending the recovery
-  economy. Benching is currently pure opportunity cost (XP only), kept cleanly
-  separable so persistent wounds can slot in later. Don't "fix" it into a real heal.
+============================================================
+## 8. DEFERRED — see cool_ideas.txt
+============================================================
+Parked (not dead): ATB / active-turn combat (battle-MODEL change; biggest one),
+emergent nemesis, cards-as-economy-lever, politics/intrigue third lever, rest-only
+healing, terrain-differentiated movement cost, post-attack-move-penalty archetype
+CONTENT, recruitment, shops, ability/stat divergence by tier (incl. the supporting
+tier — its MIA mechanic shipped, section 7, but no stats/abilities), tolls/tariffs/
+taxes on top of flat node income, node-level yield differentiation (settlement
+development).
+Do not build these without an explicit design decision to pull them into active work.

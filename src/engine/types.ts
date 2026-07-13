@@ -14,13 +14,29 @@ export interface Coord {
 export type Faction = 'player' | 'enemy'
 
 /**
- * Unit tier. Data groundwork for the run layer: "named" units (the elves) are
- * protagonists that persist, evolve, and are shown prominently; "unnamed" are
- * generic and regenerated per battle. The engine itself never branches on tier
- * — only presentation and the run layer read it. Left open for a future third
- * tier (e.g. "elite").
+ * Unit tier — the mechanism behind tiered, X4-style attachment: `levy` you
+ * spend, `named` protagonists you mourn. `levy` (the default) is generic;
+ * `named` units persist, evolve, and are shown prominently. The engine itself
+ * never branches on tier — only the run layer and presentation read it.
+ *
+ * A middle `supporting` tier is planned. Insert it BETWEEN 'levy' and 'named'
+ * in the union AND in `TIERS`/`TIER_LABELS` below; because nothing branches on
+ * the specific values (validation and display go through those tables), adding
+ * it stays a purely additive change with no refactor.
  */
-export type Tier = 'named' | 'unnamed'
+export type Tier = 'levy' | 'named'
+
+/** Canonical low→high tier order. Content validation and any ranking read this. */
+export const TIERS: readonly Tier[] = ['levy', 'named']
+
+/** The default tier for a unit whose template omits one. */
+export const DEFAULT_TIER: Tier = 'levy'
+
+/** Human-facing labels, keyed by tier. Add an entry when adding a tier. */
+export const TIER_LABELS: Record<Tier, string> = {
+  levy: 'Levy',
+  named: 'Named',
+}
 
 export interface Stats {
   maxHp: number
@@ -140,11 +156,13 @@ export interface UnitDef {
   name: string
   glyph: string
   faction: Faction
-  /** Defaults to "unnamed" when absent in data. */
+  /** Defaults to DEFAULT_TIER ("levy") when absent in data. */
   tier?: Tier
   stats: Stats
   movement: MovementProfile
   attack: AttackProfile
+  /** Attacks per activation. Defaults to 1 when absent; mechanism only today. */
+  attackBudget?: number
   /** Ability ids referencing the ability library. */
   abilities: string[]
 }
@@ -167,8 +185,20 @@ export interface Unit {
   movement: MovementProfile
   attack: AttackProfile
   abilities: AbilityDef[]
-  hasMoved: boolean
-  hasActed: boolean
+  /**
+   * Per-activation action economy. `movementRemaining` and `attacksRemaining`
+   * are budgets reset every phase (in `beginPhase`) from `movement.points` and
+   * `attackBudget`. Ordering is FREE: within one activation a unit may move,
+   * attack, and move again in any interleaving while budget remains
+   * (move-shoot-move). Movement is spent by path cost per move; each attack
+   * spends one from `attacksRemaining`. Attacking does NOT end movement.
+   */
+  movementRemaining: number
+  attacksRemaining: number
+  /** Reset value for `attacksRemaining` — attacks allowed per activation (default 1). */
+  attackBudget: number
+  /** The player/AI ended this unit's activation (Wait / nothing left). No further actions. */
+  spent: boolean
   alive: boolean
   kills: number
 }

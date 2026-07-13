@@ -1,0 +1,13 @@
+{
+  "_note": "Campaign economy tunables: node income, roster upkeep by tier, capture cost, named-tier debt interest, supporting-tier MIA duration, and the rival's spending-policy thresholds. First pass — flat, hand-tuned, fine to retune here without touching code.",
+  "startingScrip": 20,
+  "startingStores": 20,
+  "nodeYield": { "scrip": 8, "stores": 8 },
+  "yieldVariance": 0.15,
+  "captureCost": 15,
+  "upkeepCost": { "levy": 2, "supporting": 3, "named": 5 },
+  "debtInterestRate": 0.1,
+  "debtConversionRate": 1,
+  "miaReturnTicks": 6,
+  "rivalPolicy": { "expandThreshold": 30, "reactionLagTicks": 2 }
+}

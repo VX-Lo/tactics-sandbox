@@ -137,10 +137,17 @@ input { width: 70px; cursor: text; }
 .unit-name.enemy { color: var(--enemy); }
 .stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 2px 12px; margin-top: 6px; color: var(--ink); }
 .stats .k { color: var(--ink-dim); }
+.econ { margin-top: 6px; font-size: 13px; color: var(--ink); }
+.econ b { color: var(--player); }
+.econ .done { color: var(--ink-dim); font-style: italic; }
 .abilities { margin-top: 8px; }
 .abilities li { margin-left: 16px; }
 .abilities .ab-name { color: var(--accent); }
 .muted { color: var(--ink-dim); }
+
+.inspector-head { display: flex; align-items: center; gap: 8px; }
+.inspector-stats { display: flex; flex-direction: column; gap: 2px; margin-top: 6px; color: var(--ink); }
+.inspector-stats .k { color: var(--ink-dim); }
 
 .forecast { margin-top: 8px; }
 .forecast .row { display: flex; justify-content: space-between; }
@@ -174,6 +181,9 @@ input { width: 70px; cursor: text; }
 .uc-head .glyph { font-size: 18px; font-weight: bold; }
 .uc-head .unit-name { flex: 1; font-size: 15px; }
 .level { background: var(--panel-2); border-radius: 10px; padding: 1px 8px; font-size: 12px; color: var(--player); }
+.tier-tag.levy { border: 1px solid var(--ink-dim); border-radius: 10px; padding: 0 7px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-dim); }
+.tier-tag.named { border: 1px solid var(--accent); border-radius: 10px; padding: 0 7px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent); }
+.uc-stats .wounded { color: var(--danger); font-weight: bold; }
 .xpbar { height: 5px; background: #000a; border-radius: 3px; overflow: hidden; margin: 8px 0; }
 .xpbar > span { display: block; height: 100%; background: var(--accent); }
 .uc-stats { font-size: 12px; }
@@ -260,3 +270,16 @@ input { width: 70px; cursor: text; }
 #deployBtn:disabled { background: var(--panel-2); color: var(--ink-dim); border-color: #39424a; font-weight: normal; }
 button.ghost { background: transparent; }
 .deploy-hint { font-size: 12px; line-height: 1.5; }
+
+/* --- campaign map view --- */
+.camp-mapcol { flex: 1 1 620px; min-width: 340px; }
+.camp-side { flex: 1 1 300px; max-width: 380px; display: flex; flex-direction: column; gap: 12px; }
+.camp-map { width: 100%; height: auto; background: #10151a; border: 1px solid #2c333a; border-radius: 8px; }
+.camp-node { cursor: pointer; }
+.camp-node:hover { stroke: var(--player); }
+.camp-owned { margin-bottom: 8px; }
+.camp-swatch { display: inline-block; width: 11px; height: 11px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
+#camplog { max-height: 260px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+#camplog .k-capture { color: var(--player); }
+#camplog .k-defeat { color: var(--danger); }
+#camplog .k-note { color: var(--ink-dim); }

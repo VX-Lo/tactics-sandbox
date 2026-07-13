@@ -20,6 +20,7 @@ import {
   type ViewState,
   type UnitProgress,
 } from './render'
+import { unitInspectorHTML } from './unit-inspector'
 
 export interface BattleViewOptions {
   /** Called when the player clicks Continue after the battle has concluded. */
@@ -46,6 +47,8 @@ export function mountBattleView(
         <span class="turn" id="turnInfo"></span>
         <span class="outcome" id="outcome"></span>
         <span class="spacer"></span>
+        <button id="undoBtn" hidden>Undo (U)</button>
+        <button id="waitBtn" hidden>Wait (W)</button>
         <button id="endBtn">End Turn ⏎</button>
         <button id="continueBtn" hidden>Continue →</button>
       </div>
@@ -54,6 +57,7 @@ export function mountBattleView(
         <div id="board"></div>
         <div id="sidebar">
           <div class="card"><h2>Selected</h2><div id="unitPanel"></div><div id="forecast"></div></div>
+          <div class="card"><h2>Inspect</h2><div id="unitInspector"></div></div>
           <div class="card"><h2>Chronicle</h2><div id="log"></div></div>
           <div class="card"><h2>Legend</h2>
             <div class="muted">▲ high ground · ▾ low ground (hover any tile for exact height).
@@ -71,9 +75,12 @@ export function mountBattleView(
   const turnInfoEl = q('#turnInfo')
   const outcomeEl = q('#outcome')
   const unitPanelEl = q('#unitPanel')
+  const unitInspectorEl = q('#unitInspector')
   const forecastEl = q('#forecast')
   const logEl = q('#log')
   const endBtn = q<HTMLButtonElement>('#endBtn')
+  const waitBtn = q<HTMLButtonElement>('#waitBtn')
+  const undoBtn = q<HTMLButtonElement>('#undoBtn')
   const continueBtn = q<HTMLButtonElement>('#continueBtn')
   const tooltipEl = q<HTMLDivElement>('#tooltip')
 
@@ -86,13 +93,18 @@ export function mountBattleView(
   const tileKey = (x: number, y: number) => `${x},${y}`
 
   function clearSelection(): void {
+    battle.endActivation() // leaving the unit closes its undo activation
     view = { selectedId: null, destinations: new Set(), attackable: new Set() }
     forecastEl.innerHTML = ''
   }
 
   function select(unitId: string): void {
     const u = battle.unitById(unitId)
-    if (!u || u.faction !== 'player' || u.hasActed || battle.state.phase !== 'player') return
+    if (!u || u.faction !== 'player' || u.spent || battle.state.phase !== 'player') return
+    // Open (or keep) this unit's undo activation. Idempotent for the same unit,
+    // so the re-selects that refresh highlights after a move/attack/undo do NOT
+    // reset the stack; selecting a different unit starts a fresh one.
+    battle.beginActivation(unitId)
     const dests = new Set(battle.destinations(u).map((c) => tileKey(c.x, c.y)))
     dests.delete(tileKey(u.pos.x, u.pos.y))
     view = {
@@ -112,16 +124,22 @@ export function mountBattleView(
     if (selected) {
       if (occ && view.attackable.has(occ.id)) {
         battle.attack(selected.id, occ.id)
-        clearSelection()
-        render()
+        // Move-shoot-move: attacking no longer ends the turn, so keep the unit
+        // selected to expose any leftover movement (highlights refresh to the
+        // now-spent attack budget + remaining move range). Clear only if the
+        // battle just ended.
+        if (battle.outcome === 'ongoing') select(selected.id)
+        else { clearSelection(); render() }
         return
       }
-      if (!selected.hasMoved && view.destinations.has(tileKey(x, y))) {
+      if (view.destinations.has(tileKey(x, y))) {
+        // A unit may move repeatedly while movementRemaining lasts; re-select to
+        // roll the reachable highlight and budget forward.
         battle.moveUnit(selected.id, { x, y })
         select(selected.id)
         return
       }
-      if (occ && occ.faction === 'player' && !occ.hasActed) {
+      if (occ && occ.faction === 'player' && !occ.spent) {
         select(occ.id)
         return
       }
@@ -129,7 +147,7 @@ export function mountBattleView(
       render()
       return
     }
-    if (occ && occ.faction === 'player' && !occ.hasActed) select(occ.id)
+    if (occ && occ.faction === 'player' && !occ.spent) select(occ.id)
   }
 
   function onCellHover(x: number, y: number): void {
@@ -170,6 +188,25 @@ export function mountBattleView(
     tooltipEl.hidden = true
   }
 
+  // Rewind the selected unit's last reversible action, then refresh its view so
+  // the reachable highlights and Move/Attacks readout roll back live.
+  function doUndo(): void {
+    if (busy || battle.outcome !== 'ongoing') return
+    if (!view.selectedId || !battle.canUndo()) return
+    battle.undo()
+    select(view.selectedId) // recomputes destinations/attackable from restored state
+  }
+
+  // End the selected unit's activation early (it has done what the player wants).
+  function waitSelected(): void {
+    if (busy || battle.outcome !== 'ongoing') return
+    const sel = view.selectedId ? battle.unitById(view.selectedId) : undefined
+    if (!sel || sel.faction !== 'player' || sel.spent) return
+    battle.waitUnit(sel.id)
+    clearSelection()
+    render()
+  }
+
   async function endTurn(): Promise<void> {
     if (busy || battle.outcome !== 'ongoing') return
     clearSelection()
@@ -185,7 +222,7 @@ export function mountBattleView(
     for (const id of ids) {
       if (battle.outcome !== 'ongoing') break
       const u = battle.unitById(id)
-      if (u && u.alive && !u.hasActed) {
+      if (u && u.alive && !u.spent) {
         takeUnitTurn(battle, u)
         render()
         await delay(260)
@@ -207,6 +244,7 @@ export function mountBattleView(
     else outcomeEl.textContent = ''
 
     unitPanelEl.innerHTML = unitPanelHTML(view.selectedId ? battle.unitById(view.selectedId) : undefined)
+    unitInspectorEl.innerHTML = unitInspectorHTML(view.selectedId ? battle.unitById(view.selectedId) : undefined)
     logEl.innerHTML = logHTML(battle.log)
     logEl.scrollTop = logEl.scrollHeight
     updateControls()
@@ -216,6 +254,14 @@ export function mountBattleView(
     const over = battle.outcome !== 'ongoing'
     endBtn.disabled = busy || over || battle.state.phase !== 'player'
     endBtn.hidden = over
+    // Wait/Undo are offered only while a still-active player unit is selected;
+    // Undo enables once the unit has a reversible action on its stack.
+    const sel = view.selectedId ? battle.unitById(view.selectedId) : undefined
+    const commanding =
+      !!sel && sel.faction === 'player' && !sel.spent && !busy && !over && battle.state.phase === 'player'
+    waitBtn.hidden = !commanding
+    undoBtn.hidden = !commanding
+    undoBtn.disabled = !battle.canUndo()
     // Offer Continue only once the battle is decided and a handler wants it.
     continueBtn.hidden = !(over && options.onEnd && !busy)
   }
@@ -242,12 +288,16 @@ export function mountBattleView(
   }
   const onKey = (e: KeyboardEvent) => {
     if (e.key === 'Enter' && !endBtn.disabled && !endBtn.hidden) void endTurn()
+    else if ((e.key === 'w' || e.key === 'W') && !waitBtn.hidden) waitSelected()
+    else if ((e.key === 'u' || e.key === 'U') && !undoBtn.hidden && !undoBtn.disabled) doUndo()
   }
 
   boardEl.addEventListener('click', onClick)
   boardEl.addEventListener('mousemove', onMove)
   boardEl.addEventListener('mouseleave', onLeave)
   endBtn.addEventListener('click', () => void endTurn())
+  waitBtn.addEventListener('click', () => waitSelected())
+  undoBtn.addEventListener('click', () => doUndo())
   continueBtn.addEventListener('click', () => options.onEnd?.())
   window.addEventListener('keydown', onKey)
 

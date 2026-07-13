@@ -13,9 +13,10 @@ import { defaultContent, instantiateUnit } from './content'
 import { makeEventBus, type EventBus, type EventHandler } from './events'
 import { makeRng, type Rng } from './rng'
 import { makeAbilitySystem, type AbilitySystem } from './abilities'
-import { reachable, moveDestinations, type Reach } from './movement'
+import { reachable, moveDestinations, canStopAt, type Reach } from './movement'
 import { coordsEqual } from './grid'
 import { resolveCombat, inAttackRange, forecast, type CombatResult, type Forecast } from './combat'
+import { classifyAction, type ActionKind } from './commitment'
 import type {
   BattleState,
   Content,
@@ -46,6 +47,26 @@ export interface BattleOptions {
 const DEFAULT_PLAYER_ROSTER = ['sakura', 'hana', 'yuki', 'aoi']
 const DEFAULT_ENEMY_ROSTER = ['skeleton', 'skeleton', 'skeleton', 'ghoul', 'ghoul', 'wight']
 
+/** The exact turn-state a reversible action can be rewound to (see undo). */
+interface TurnStateSnapshot {
+  pos: Coord
+  movementRemaining: number
+  attacksRemaining: number
+}
+
+/**
+ * An open intra-unit undo activation: the continuous span during which a driver
+ * commands ONE unit. `stack` holds pre-action snapshots of the reversible moves
+ * taken since the activation opened (or since the unit's last COMMITTING action).
+ * Purely authoring-time bookkeeping — it lives on the Battle, never in
+ * `BattleState`, is never logged, and stays `null` for the AI/run drivers (which
+ * never open an activation), so replays are untouched.
+ */
+interface Activation {
+  unitId: string
+  stack: TurnStateSnapshot[]
+}
+
 export class Battle {
   readonly content: Content
   readonly state: BattleState
@@ -55,6 +76,8 @@ export class Battle {
   private readonly bus: EventBus
   private readonly abilities: AbilitySystem
   private readonly ctx: EffectContext
+  // Open intra-unit undo activation, or null. Only interactive drivers open one.
+  private activation: Activation | null = null
 
   constructor(opts: BattleOptions) {
     this.content = opts.content ?? defaultContent
@@ -151,15 +174,15 @@ export class Battle {
     return reachable(this.state, this.content, unit)
   }
 
-  /** Legal stopping tiles for a unit that hasn't moved or acted this phase. */
+  /** Legal stopping tiles given the unit's REMAINING movement budget. */
   destinations(unit: Unit): Coord[] {
-    if (unit.hasMoved || unit.hasActed) return []
+    if (unit.spent) return []
     return moveDestinations(this.reachable(unit), this.state, unit)
   }
 
-  /** Enemies attackable from the unit's current tile, if it may still act. */
+  /** Enemies attackable from the unit's current tile, if it has an attack left. */
   attackTargets(unit: Unit): Unit[] {
-    if (unit.hasActed) return []
+    if (unit.spent || unit.attacksRemaining <= 0) return []
     return this.living().filter((t) => t.faction !== unit.faction && inAttackRange(unit, t))
   }
 
@@ -177,15 +200,23 @@ export class Battle {
 
   // --- commands --------------------------------------------------------------
 
-  /** Move a unit to a legal destination. Returns false (no-op) if illegal. */
+  /**
+   * Move a unit to a legal destination, spending its path cost from
+   * movementRemaining. Returns false (no-op) if illegal. A unit may move more
+   * than once per activation while budget remains, and may move after attacking.
+   */
   moveUnit(unitId: string, dest: Coord): boolean {
     const u = this.actableUnit(unitId)
-    if (!u || u.hasMoved) return false
-    const legal = this.destinations(u).some((c) => coordsEqual(c, dest))
-    if (!legal) return false
+    if (!u || u.spent) return false
+    if (coordsEqual(u.pos, dest)) return false // staying put isn't a move
+    const reach = reachable(this.state, this.content, u)
+    const cost = reach.costs.get(`${dest.x},${dest.y}`)
+    if (cost === undefined || !canStopAt(this.state, u, dest.x, dest.y)) return false
+    const before = this.captureTurnState(u) // for undo, taken before mutating
     u.pos = { ...dest }
-    u.hasMoved = true
+    u.movementRemaining -= cost
     this.emit({ type: 'on_move', unit: u })
+    this.recordAction(unitId, 'move', before)
     return true
   }
 
@@ -193,13 +224,18 @@ export class Battle {
   attack(attackerId: string, defenderId: string): CombatResult | null {
     const attacker = this.actableUnit(attackerId)
     const defender = this.unitById(defenderId)
-    if (!attacker || attacker.hasActed) return null
+    if (!attacker || attacker.spent || attacker.attacksRemaining <= 0) return null
     if (!defender || !defender.alive || defender.faction === attacker.faction) return null
     if (!inAttackRange(attacker, defender)) return null
 
+    const before = this.captureTurnState(attacker) // uniform routing; unused for a committing action
     const result = resolveCombat(this.state, this.content, this.rng, attacker, defender)
-    attacker.hasActed = true
-    attacker.hasMoved = true // acting ends the unit's turn; no move-after-attack
+    // Spend one attack. Free ordering: movement is NOT consumed and the unit is
+    // NOT ended — it may still move (move-shoot-move) while movementRemaining lasts.
+    attacker.attacksRemaining -= 1
+    // Attack is COMMITTING (resolves RNG): this floors the undo stack so nothing
+    // at/before this attack is ever undoable.
+    this.recordAction(attackerId, 'attack', before)
 
     this.narrateCombat(result)
     // Fire on_kill for every death, crediting the killer — this is where
@@ -213,12 +249,58 @@ export class Battle {
     return result
   }
 
-  /** Mark a unit as done for the phase without moving or attacking. */
+  /** End a unit's activation: it takes no further actions this phase. */
   waitUnit(unitId: string): boolean {
     const u = this.actableUnit(unitId)
     if (!u) return false
-    u.hasMoved = true
-    u.hasActed = true
+    u.spent = true
+    u.movementRemaining = 0
+    u.attacksRemaining = 0
+    if (this.activation?.unitId === unitId) this.activation = null // Wait closes the undo activation
+    return true
+  }
+
+  // --- intra-unit undo -------------------------------------------------------
+  // An "activation" is one continuous span of commanding a single unit. Only an
+  // interactive driver opens one; the AI/run never do, so this whole subsystem is
+  // inert (and replay-neutral) unless a human is at the controls.
+
+  /**
+   * Open (or keep) an undo activation for `unitId`. Idempotent for the same unit
+   * — re-selecting it mid-activation preserves the stack. Selecting a DIFFERENT
+   * unit starts a fresh activation, discarding the previous unit's stack (undo
+   * never crosses unit selections).
+   */
+  beginActivation(unitId: string): void {
+    if (this.activation?.unitId === unitId) return
+    this.activation = { unitId, stack: [] }
+  }
+
+  /** Close the current activation (deselect / switch away). Clears the stack. */
+  endActivation(): void {
+    this.activation = null
+  }
+
+  /** Is there a reversible action to undo in the current activation? */
+  canUndo(): boolean {
+    return this.activation !== null && this.activation.stack.length > 0
+  }
+
+  /**
+   * Rewind the most recent reversible action of the current activation, restoring
+   * exact prior turn-state (position, movementRemaining, attacksRemaining).
+   * Consumes NO randomness and emits nothing. No-op (returns false) on an empty
+   * stack or closed activation. Undo can never reach past a COMMITTING action,
+   * because such actions clear the stack (see recordAction).
+   */
+  undo(): boolean {
+    if (!this.activation || this.activation.stack.length === 0) return false
+    const snap = this.activation.stack.pop()!
+    const u = this.unitById(this.activation.unitId)
+    if (!u) return false
+    u.pos = { ...snap.pos }
+    u.movementRemaining = snap.movementRemaining
+    u.attacksRemaining = snap.attacksRemaining
     return true
   }
 
@@ -233,6 +315,19 @@ export class Battle {
 
   // --- internals -------------------------------------------------------------
 
+  private captureTurnState(u: Unit): TurnStateSnapshot {
+    return { pos: { ...u.pos }, movementRemaining: u.movementRemaining, attacksRemaining: u.attacksRemaining }
+  }
+
+  // The single place every action is routed through the commitment policy. If the
+  // unit is the one being activated: a REVERSIBLE action pushes its pre-state for
+  // undo; a COMMITTING action floors the stack (nothing at/before it is undoable).
+  private recordAction(unitId: string, kind: ActionKind, before: TurnStateSnapshot): void {
+    if (this.activation?.unitId !== unitId) return
+    if (classifyAction(kind) === 'committing') this.activation.stack = []
+    else this.activation.stack.push(before)
+  }
+
   private actableUnit(id: string): Unit | undefined {
     if (this.state.outcome !== 'ongoing') return undefined
     const u = this.unitById(id)
@@ -241,10 +336,13 @@ export class Battle {
   }
 
   private beginPhase(faction: Faction): void {
+    this.activation = null // phase end closes any open undo activation
     const roster = this.living(faction)
     for (const u of roster) {
-      u.hasMoved = false
-      u.hasActed = false
+      // Refill the per-activation budgets and clear the done flag.
+      u.movementRemaining = u.movement.points
+      u.attacksRemaining = u.attackBudget
+      u.spent = false
     }
     this.log.push({ kind: 'phase', message: `— ${faction} phase (turn ${this.state.turn}) —` })
     // Turn-start triggers fire after flags reset (e.g. Forest Ward regen).

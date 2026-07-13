@@ -1,0 +1,50 @@
+{
+  "_note": "Draft Actium world for the campaign skeleton. Flavor palette, not canon — overwrite freely. Registers: human holds use plain/weathered names; Halcyon Reach (elf) uses the Japanese register; Free Signal leans radio-aesthetic. Norodael is the mostly-abandoned frontier region and the player's start. Only ONE party roams (the rival); factions below just own settlements statically at start.",
+
+  "factions": [
+    { "id": "player",  "name": "You",              "color": "#6ea8fe" },
+    { "id": "windward","name": "Windward Compact",  "color": "#e0a458", "flavor": "Human mercantile polity; a radio-trade network strung between the leeward isles." },
+    { "id": "halcyon", "name": "Halcyon Reach",     "color": "#8fd6b4", "flavor": "Elf domain of the high quiet isles; old, coherent, unhurried." },
+    { "id": "signal",  "name": "Free Signal",       "color": "#c98fd6", "flavor": "Independent stations and drifter holds; loyal to a frequency, not a flag." },
+    { "id": "neutral", "name": "Unclaimed",         "color": "#6b6f76" }
+  ],
+
+  "rival": { "faction": "windward", "startNode": "coldharbor", "strength": 10 },
+  "player": { "startNode": "norodael_landing", "strength": 8 },
+
+  "nodes": [
+    { "id": "norodael_landing", "name": "Norodael Landing", "kind": "settlement", "owner": "neutral", "strength": 3,  "pos": [2, 6],  "flavor": "A half-abandoned mooring town on the Norodael frontier. Where nobodies begin." },
+    { "id": "greywater",        "name": "Greywater",        "kind": "settlement", "owner": "neutral", "strength": 4,  "pos": [4, 8],  "flavor": "Salt-stained radio shacks around a dead relay tower." },
+    { "id": "last_mast",        "name": "The Last Mast",    "kind": "settlement", "owner": "neutral", "strength": 5,  "pos": [1, 9],  "flavor": "The furthest hold before the open air. Barely holding on." },
+
+    { "id": "coldharbor",       "name": "Coldharbor",       "kind": "settlement", "owner": "windward", "strength": 9, "pos": [7, 5],  "flavor": "Windward's frontier customs station and staging yard." },
+    { "id": "marrow_station",   "name": "Marrow Station",   "kind": "settlement", "owner": "windward", "strength": 11,"pos": [9, 7],  "flavor": "A trade hub of gantries and cargo cranes." },
+    { "id": "vane",             "name": "Vane",             "kind": "settlement", "owner": "windward", "strength": 8, "pos": [8, 3],  "flavor": "A weather-hold turned toll-post." },
+
+    { "id": "aoi_spire",        "name": "Aoi Spire",        "kind": "settlement", "owner": "halcyon", "strength": 12, "pos": [5, 1],  "flavor": "A pale tower-hold in the high quiet; old as the isles." },
+    { "id": "kaede_hold",       "name": "Kaede Hold",       "kind": "settlement", "owner": "halcyon", "strength": 10, "pos": [3, 2],  "flavor": "Terraced and unhurried; the Reach's leeward gate." },
+
+    { "id": "static",           "name": "Static",           "kind": "settlement", "owner": "signal",  "strength": 7,  "pos": [10, 10],"flavor": "A drifter station broadcasting a number that never changes." },
+    { "id": "longwave",         "name": "Longwave",         "kind": "settlement", "owner": "signal",  "strength": 6,  "pos": [11, 6], "flavor": "A hold that trades in frequencies and favors." },
+
+    { "id": "the_crossing",     "name": "The Crossing",     "kind": "waypoint",   "owner": "neutral", "strength": 0,  "pos": [6, 6],  "flavor": "Where the frontier lanes braid together." },
+    { "id": "open_air",         "name": "Open Air",         "kind": "waypoint",   "owner": "neutral", "strength": 0,  "pos": [6, 9],  "flavor": "A junction over nothing at all." }
+  ],
+
+  "edges": [
+    { "from": "norodael_landing", "to": "greywater",     "cost": 2 },
+    { "from": "norodael_landing", "to": "last_mast",     "cost": 2 },
+    { "from": "greywater",        "to": "open_air",      "cost": 2 },
+    { "from": "last_mast",        "to": "open_air",      "cost": 3 },
+    { "from": "open_air",         "to": "the_crossing",  "cost": 2 },
+    { "from": "the_crossing",     "to": "coldharbor",    "cost": 2 },
+    { "from": "the_crossing",     "to": "kaede_hold",    "cost": 3 },
+    { "from": "the_crossing",     "to": "static",        "cost": 4 },
+    { "from": "coldharbor",       "to": "vane",          "cost": 2 },
+    { "from": "coldharbor",       "to": "marrow_station","cost": 2 },
+    { "from": "marrow_station",   "to": "longwave",      "cost": 2 },
+    { "from": "longwave",         "to": "static",        "cost": 2 },
+    { "from": "vane",             "to": "aoi_spire",     "cost": 3 },
+    { "from": "aoi_spire",        "to": "kaede_hold",    "cost": 2 }
+  ]
+}

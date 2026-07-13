@@ -1,0 +1,68 @@
+# cool_ideas.txt — the parking lot
+
+Shelved, NOT dead. Each entry: the idea, why it's parked, and what it would touch if revived.
+Nothing here is a build target until it's pulled into CLAUDE.md as active work.
+This file is a memory aid, not a spec. Design instances only see it if pasted in.
+
+---
+
+## Active-turn / JRPG-tactics combat (the big one)
+The enemy acts without waiting for the player to finish their turn — semi-real-time,
+ATB-flavored tactics rather than strict I-go-you-go. Not verbatim ATB; the feel is
+"the battlefield doesn't freeze while I think."
+
+WHY PARKED: changes EVERYTHING. It breaks the current turn model, the undo system
+(you can't freely rewind a clock that's running), and the commit-on-reveal policy.
+It is a battle-MODEL decision, not a feature bolt-on.
+
+WHEN IT COMES BACK: as its own dedicated arc, Opus-level, and only after the current
+turn-based loop is fully proven and fun. The commitment-policy seam was deliberately
+built so "what commits and when" can change — that seam is the hook ATB would use.
+Revisit as: "does time pressure inside the battle serve the fantasy, or does it fight
+the execute-under-commitment / optimize-between-battles split we chose?"
+
+---
+
+## The emergent nemesis
+An ENEMY levy that keeps surviving the player's attacks promotes into a named
+antagonist the system generated — "send fifty men to kill me" pointed back at the player.
+Tier vocabulary already applies to enemies, so the machinery is half-present.
+
+WHY PARKED: needs recruitment + a persistent campaign force for a nemesis to lead
+and recur. Thin without the strategic layer having depth.
+WHEN: after campaign recruitment/persistence exists. Highest thematic payoff on the board.
+
+---
+
+## Cards as a lever (economy / logistics)
+Shelved from the very start. A card-driven system, most likely thematic home is
+economy/logistics rather than combat. Only revive if a REAL thematic home appears —
+never as a mechanic for its own sake.
+
+---
+
+## Non-combat third lever (politics / intrigue)
+AI-native social conflict as a genuine third pillar alongside tactics and economy —
+the "odd trinity." Compelling long-term identity, not a near-term build.
+
+---
+
+## Rest-only healing (attrition tightening)
+Make fighting every battle grind a unit down — healing requires resting, so you can't
+fight forever without consequence. Currently recovery is uniform/passive.
+WHY PARKED: only survivable once recruitment exists to backfill losses; otherwise a
+small roster death-spirals. Pairs naturally with the campaign attrition loop.
+
+---
+
+## Terrain-differentiated movement cost
+Movement cost varies by tile/terrain in tactical battles. Deferred to keep the movement
+economy simple. Pure additive later.
+
+---
+
+## Overnight AI-vs-AI balance sim (NOT really shelved — planned)
+Headless, no-render, runs thousands of seeded battles/campaigns to completion and reports
+win-rates + outliers. Turns human playtesting into a free overnight process.
+Needs: AI that uses the economy, tactics wired into resolveBattle, seeds recorded to state.
+This is the payoff of determinism. Build it; don't lose it.

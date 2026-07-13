@@ -7,9 +7,9 @@ import type { EffectContext } from '../src/engine/types'
 import { uniformGrid, makeState } from './helpers'
 
 describe('tier field', () => {
-  it('instantiated units carry tier from their template (default unnamed)', () => {
+  it('instantiated units carry tier from their template (default levy)', () => {
     expect(instantiateUnit(defaultContent, 'sakura', 's').tier).toBe('named')
-    expect(instantiateUnit(defaultContent, 'skeleton', 'z').tier).toBe('unnamed')
+    expect(instantiateUnit(defaultContent, 'skeleton', 'z').tier).toBe('levy')
   })
 })
 
