@@ -199,6 +199,11 @@ Believed shipped:
   and makeRunRosterPort (src/run/roster-port.ts — the real adapter over a live Run's
   roster). Injected via CampaignOptions.rosterPort. Guarded by test/boundary.test.ts
   (fails the build if src/engine or src/run ever imports src/campaign).
+- Campaign UI animation layer (src/ui/animate.ts, wired into campaign-view.ts /
+  campaign-main.ts): tweens displayed numbers/gauge bars and flashes a settlement on
+  capture, so state deltas read as motion instead of jump-cuts. Presentation only —
+  it reads Campaign's existing public queries and never touches campaign/economy
+  state, tick timing, or determinism; doesn't affect any tested contract.
 
 AUDIT (this pass, diff 8624923..HEAD on ai/battle/content/movement/types/run.ts):
 CLEAN, no fixes needed. Engine vocabulary was extended additively (Tier is now

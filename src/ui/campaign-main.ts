@@ -5,7 +5,7 @@
 import './style.css'
 import { Campaign } from '../campaign/campaign'
 import { defaultWorld } from '../campaign/world'
-import { campaignMapSVG, campaignSidebarHTML } from './campaign-view'
+import { animateCampaignUI, campaignMapSVG, campaignSidebarHTML } from './campaign-view'
 
 const app = document.getElementById('app')!
 let campaign: Campaign
@@ -29,6 +29,7 @@ function render(): void {
       <section class="camp-mapcol">${campaignMapSVG(campaign)}</section>
       <section class="camp-side">${campaignSidebarHTML(campaign)}</section>
     </div>`
+  animateCampaignUI(app, campaign) // presentation only — tweens the numbers/bars just inserted
 
   app.querySelectorAll<SVGElement>('.camp-node').forEach((el) =>
     el.addEventListener('click', () => travelTo(el.dataset.node!)),

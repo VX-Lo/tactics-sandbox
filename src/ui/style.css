@@ -283,3 +283,19 @@ button.ghost { background: transparent; }
 #camplog .k-capture { color: var(--player); }
 #camplog .k-defeat { color: var(--danger); }
 #camplog .k-note { color: var(--ink-dim); }
+
+/* A settlement's fill/stroke are driven fresh each render (full rebuild), so a
+   plain CSS transition can't animate the color swap — this is a self-playing
+   entrance flash instead, applied only on the render right after a capture. */
+@keyframes campCaptureFlash {
+  0% { filter: brightness(2.8) saturate(1.5); transform: scale(1.3); }
+  100% { filter: brightness(1) saturate(1); transform: scale(1); }
+}
+.camp-settlement.just-captured { animation: campCaptureFlash 700ms ease-out; transform-origin: center; transform-box: fill-box; }
+
+/* Economy reserve/expansion gauges — same fill-bar language as .xpbar. */
+.econ-gauge-row { display: flex; align-items: center; gap: 8px; margin-top: 5px; font-size: 12px; }
+.econ-gauge-row .lbl { width: 62px; flex-shrink: 0; }
+.econ-gauge { flex: 1; height: 6px; background: #000a; border-radius: 3px; overflow: hidden; }
+.econ-gauge > span { display: block; height: 100%; background: var(--player); }
+.econ-gauge.stores > span { background: #6ad06a; }
