@@ -7,6 +7,9 @@
 // ONE pillar — territory/ownership (pillar 4) — given real depth. Everything
 // here is plain, serialisable data so a campaign can be snapshotted and replayed.
 
+// Type-only, so no runtime cycle: log.ts imports NodeId/Owner from here (below).
+import type { CampaignLogEvent } from './log'
+
 export type NodeId = string
 
 /**
@@ -99,9 +102,11 @@ export type Order =
   | { op: 'capture' }
   | { op: 'wait' }
 
-/** A chronicle entry, for the map view and tests. */
+/** A chronicle entry, for the map view and tests: a turn number plus the typed
+ *  event record itself (see campaign/log.ts). Turning it into display text is
+ *  a separate, pure step (log.describeCampaignLogEvent) — kept out of this
+ *  plain-data type so CampaignEvent stays snapshot/replay-safe. */
 export interface CampaignEvent {
   turn: number
-  kind: 'capture' | 'defeat' | 'note'
-  message: string
+  event: CampaignLogEvent
 }

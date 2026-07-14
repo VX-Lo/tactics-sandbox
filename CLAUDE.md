@@ -204,6 +204,15 @@ Believed shipped:
   capture, so state deltas read as motion instead of jump-cuts. Presentation only —
   it reads Campaign's existing public queries and never touches campaign/economy
   state, tick timing, or determinism; doesn't affect any tested contract.
+- Campaign event log (src/campaign/log.ts): captures, upkeep failures (tier-generic,
+  no unit ids/names), MIA returns, and the rival spending policy's hold/expand
+  transitions all produce typed CampaignLogEvent records — a pure, tested step
+  (test/campaign-log.test.ts) fully separate from turning a record into display text
+  (describeCampaignLogEvent, also pure/tested) and from the DOM rendering itself
+  (campaign-view.ts's chronicle panel, newest-first, capped history, reuses the
+  animate.ts fade-in pattern for freshly-appended entries only). Doesn't change tick
+  timing/frequency or introduce any randomness — it only describes decisions already
+  made in economy.ts/campaign.ts.
 
 AUDIT (this pass, diff 8624923..HEAD on ai/battle/content/movement/types/run.ts):
 CLEAN, no fixes needed. Engine vocabulary was extended additively (Tier is now

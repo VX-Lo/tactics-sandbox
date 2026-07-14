@@ -281,8 +281,15 @@ button.ghost { background: transparent; }
 .camp-swatch { display: inline-block; width: 11px; height: 11px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
 #camplog { max-height: 260px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
 #camplog .k-capture { color: var(--player); }
-#camplog .k-defeat { color: var(--danger); }
-#camplog .k-note { color: var(--ink-dim); }
+#camplog .k-defeat, #camplog .k-capture-blocked { color: var(--danger); }
+#camplog .k-upkeep-lost, #camplog .k-upkeep-mia, #camplog .k-upkeep-debt { color: var(--ink-dim); }
+#camplog .k-mia-return { color: #6ad06a; }
+#camplog .k-rival-hold, #camplog .k-rival-expand { color: var(--enemy); }
+
+/* A freshly-appended entry fades/slides in once; older entries re-rendered on
+   the same tick are untouched (campaign-view.ts flags only the truly new ones). */
+@keyframes campLogIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+#camplog .log-new { animation: campLogIn 350ms ease-out; }
 
 /* A settlement's fill/stroke are driven fresh each render (full rebuild), so a
    plain CSS transition can't animate the color swap — this is a self-playing

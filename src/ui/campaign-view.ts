@@ -10,8 +10,9 @@
 // HTML this module returns (see campaign-main.ts).
 
 import type { Campaign } from '../campaign/campaign'
-import { PLAYER } from '../campaign/types'
+import { PLAYER, type NodeId, type Owner } from '../campaign/types'
 import { ECONOMY } from '../campaign/economy'
+import { describeCampaignLogEvent } from '../campaign/log'
 import { tweenBarWidth, tweenText } from './animate'
 
 const esc = (s: string): string =>
@@ -26,6 +27,37 @@ const sy = (y: number) => (0.08 + y * 0.84) * H
 // capture for one flash animation. Keyed by object identity so a fresh
 // Campaign (the "New" button) never flashes on its first render.
 const lastOwnership = new WeakMap<Campaign, Map<string, string>>()
+
+// How many entries the log renders (newest first, so what just happened is
+// visible without scrolling) vs. how many Campaign keeps (see campaign.ts's
+// own, larger MAX_LOG_ENTRIES cap — this is just the visible window).
+const LOG_VISIBLE_CAP = 20
+
+// Entry count last rendered, per Campaign instance — lets the log flag only
+// the entries that are actually NEW this render for a one-shot fade-in,
+// instead of replaying the animation on every re-render (same technique as
+// lastOwnership above). A fresh Campaign starts with nothing "new".
+const lastLogCount = new WeakMap<Campaign, number>()
+
+function renderLogHTML(c: Campaign): string {
+  const total = c.events.length
+  const prevCount = lastLogCount.get(c) ?? total
+  lastLogCount.set(c, total)
+  const newCount = Math.max(0, total - prevCount)
+
+  const nodeName = (id: NodeId) => c.nodeOf(id)?.name ?? id
+  const factionName = (f: Owner) => c.factionName(f)
+
+  const recent = c.events.slice(-LOG_VISIBLE_CAP) // oldest..newest within the window
+  return recent
+    .map((e, i) => {
+      const isNew = recent.length - 1 - i < newCount // 0 = newest
+      const text = describeCampaignLogEvent(e.event, { factionName, nodeName })
+      return `<div class="entry k-${e.event.kind}${isNew ? ' log-new' : ''}">T${e.turn}: ${esc(text)}</div>`
+    })
+    .reverse() // newest first — the point that just happened shouldn't require scrolling to
+    .join('')
+}
 
 export function campaignMapSVG(c: Campaign): string {
   const nodeById = (id: string) => c.nodeOf(id)!
@@ -125,10 +157,7 @@ export function campaignSidebarHTML(c: Campaign): string {
     p
       ? `<div>${label}: at <b>${esc(c.nodeOf(p.pos)!.name)}</b> · strength <b id="party-${key}-str">${p.strength}</b></div>`
       : `<div class="muted">${label}: destroyed</div>`
-  const events = c.events
-    .slice(-12)
-    .map((e) => `<div class="entry k-${e.kind}">T${e.turn}: ${esc(e.message)}</div>`)
-    .join('')
+  const events = renderLogHTML(c)
 
   const res = c.resourcesOf(PLAYER)
   const tally = playerRosterTally(c)

@@ -28,6 +28,19 @@ import {
 } from './economy'
 import { buildAdjacency, nextHop, shortestPaths, type Adjacency, type LoadedWorld } from './world'
 import { PLAYER, type CampaignEvent, type NodeId, type Order, type Owner, type Party, type ResolveBattle, type World, type WorldNode } from './types'
+import {
+  captureBlockedEvent,
+  captureLostEvent,
+  captureWonEvent,
+  miaReturnEvents,
+  rivalPolicyEvent,
+  upkeepFailureEvents,
+  type CampaignLogEvent,
+} from './log'
+
+/** How many chronicle entries a campaign keeps — "a few dozen," no persistence
+ *  beyond the session needed. Presentation caps its own visible window further. */
+const MAX_LOG_ENTRIES = 50
 
 export interface CampaignOptions {
   /** The combat socket. Defaults to the deterministic auto-resolver stub. */
@@ -100,13 +113,8 @@ export class Campaign {
     for (const faction of this.rosterPort.factions()) {
       const bank = this.resourceBank(faction)
       const result = tickEconomy(this.rosterPort, this.ledger, faction, bank, this.ownedCount(faction), this.turnCount, this.econ, this.rng)
-      for (const f of result.failures) {
-        const name = this.factionName(faction)
-        if (f.outcome === 'lost') this.event('note', `${name} cannot feed a levy — ${f.unitId} is lost.`)
-        else if (f.outcome === 'mia') this.event('note', `${name} cannot feed ${f.unitId} — it goes missing.`)
-        else this.event('note', `${name} cannot feed ${f.unitId} — the debt grows.`)
-      }
-      for (const id of result.miaReturned) this.event('note', `${this.factionName(faction)}'s ${id} returns from MIA.`)
+      for (const e of upkeepFailureEvents(faction, result.failures)) this.log(e)
+      for (const e of miaReturnEvents(faction, result.miaReturned)) this.log(e)
     }
   }
 
@@ -160,10 +168,16 @@ export class Campaign {
   }
 
   // Pure policy step (economy.rivalExpandDecision) wrapped with this campaign's
-  // persistent per-faction streak state.
+  // persistent per-faction streak state. Also logs the policy's visible
+  // transitions (log.rivalPolicyEvent) — holding-with-surplus and clearing to
+  // expand — so the reaction lag reads as legible waiting, not silence.
   private rivalReadyToExpand(faction: Owner): boolean {
-    const { ready, streak } = rivalExpandDecision(this.resourceBank(faction).scrip, this.expandStreak.get(faction) ?? 0, this.econ)
+    const priorStreak = this.expandStreak.get(faction) ?? 0
+    const wasReady = priorStreak >= this.econ.rivalPolicy.reactionLagTicks
+    const { ready, streak } = rivalExpandDecision(this.resourceBank(faction).scrip, priorStreak, this.econ)
     this.expandStreak.set(faction, streak)
+    const e = rivalPolicyEvent(faction, streak > 0, wasReady, ready)
+    if (e) this.log(e)
     return ready
   }
 
@@ -180,7 +194,7 @@ export class Campaign {
 
     const bank = this.resourceBank(party.faction)
     if (bank.scrip < this.econ.captureCost) {
-      this.event('note', `${this.factionName(party.faction)} cannot afford to move on ${node.name}.`)
+      this.log(captureBlockedEvent(party.faction, node.id))
       return
     }
     bank.scrip -= this.econ.captureCost
@@ -192,10 +206,10 @@ export class Campaign {
     if (outcome.winner === 'attacker') {
       party.strength += outcome.attackerDelta // <= 0; auto-resolver keeps it >= 1
       this.ownership.set(node.id, party.faction) // the payoff: territory flips, persists
-      this.event('capture', `${this.factionName(party.faction)} captured ${node.name} (strength now ${party.strength}).`)
+      this.log(captureWonEvent(party.faction, node.id, party.strength))
     } else {
       this.removeParty(party.id) // the defeated party is removed from the map
-      this.event('defeat', `${this.factionName(party.faction)}'s warband was destroyed assaulting ${node.name}.`)
+      this.log(captureLostEvent(party.faction, node.id))
     }
   }
 
@@ -291,8 +305,9 @@ export class Campaign {
     this.parties = this.parties.filter((p) => p.id !== id)
   }
 
-  private event(kind: CampaignEvent['kind'], message: string): void {
-    this.events.push({ turn: this.turnCount, kind, message })
+  private log(event: CampaignLogEvent): void {
+    this.events.push({ turn: this.turnCount, event })
+    if (this.events.length > MAX_LOG_ENTRIES) this.events.shift()
   }
 
   /**
