@@ -15,9 +15,10 @@ export interface LoadedWorld {
   /** settlement id -> initial owner. Waypoints are never owned. */
   ownership: Map<NodeId, Owner>
   parties: Party[]
-  /** Per-faction starting roster for the economy stub (see economy.ts's
-   *  STUBBED SEAM). A party with no `roster` in the data gets an empty one —
-   *  it still gets a resource bank and income, just nothing to feed. */
+  /** Per-faction starting roster that seeds the in-memory RosterPort (see
+   *  economy.ts's makeInMemoryRosterPort). A party with no `roster` in the data
+   *  gets an empty one — it still gets a resource bank and income, just nothing
+   *  to feed. */
   rosterSeeds: RosterSeed[]
 }
 

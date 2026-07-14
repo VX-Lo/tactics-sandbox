@@ -3,84 +3,122 @@
 // rival spending policy. Tunables live in data/economy.json so retuning never
 // touches this file (data-not-code, matching the rest of data/).
 //
-// STUBBED SEAM: upkeep needs to read a roster unit's tier and mutate roster
-// state (remove a levy, MIA a supporting unit, debt a named one). The real
-// roster lives in the run layer, which the campaign module must never import
-// (CLAUDE.md section 2). `RosterPort` is the placeholder standing in for that
-// not-yet-designed campaign<->run contract — a plain interface, not a real
-// integration. `makeStubRosterPort` is an in-memory, world-data-seeded
-// implementation good enough to play and test against today. Swapping in the
-// real run-layer roster later means replacing what implements this port, not
-// rearchitecting the campaign. THIS IS A KANAME/OPUS QUESTION TO DESIGN FOR
-// REAL — do not extend this stub into a real contract.
+// ROSTER SEAM (the real contract, not a stub):
+// Upkeep reads a unit's tier and, on a shortfall, either removes it (levy),
+// benches it MIA (supporting), or debts it (named). The tier and the removal
+// are RUN-LAYER truth reached through the `RosterPort` interface (defined in
+// src/contracts/roster.ts, dependency-inverted so the campaign never imports the
+// run module). The MIA countdown and the Scrip debt, by contrast, are the
+// economy's OWN bookkeeping — meaningless outside this layer — so they live here
+// in the `UpkeepLedger`, keyed by unit id, never on run-layer units. See the
+// contract file for the full rationale of the split.
 
 import economyData from '../../data/economy.json'
 import type { CampaignRng } from './rng'
 import type { Owner } from './types'
+import type { RosterPort, RosterTier, RosterUnitRef } from '../contracts/roster'
 
-export type EconomyTier = 'levy' | 'supporting' | 'named'
+export type { RosterPort, RosterUnitRef } from '../contracts/roster'
+/** @deprecated Use RosterTier from the roster contract. Kept for world.ts's seed typing. */
+export type EconomyTier = RosterTier
 
 export interface Resources {
   scrip: number
   stores: number
 }
 
-/** A roster unit as the economy needs to see it. See STUBBED SEAM above. */
-export interface RosterUnitStub {
-  id: string
-  tier: EconomyTier
-  /** Supporting-tier upkeep failure: off the active roster until it returns. */
+// --- the campaign-owned upkeep ledger (MIA / debt) ---------------------------
+// This state is the economy's, NOT the run layer's: it never crosses the
+// RosterPort. Keyed by (faction, unit id) so it lines up with the port's units.
+
+/** One unit's upkeep-failure status. Absent from the ledger == the healthy zero. */
+export interface UnitUpkeep {
+  /** Supporting-tier failure: benched until `miaReturnsAtTick`, excluded from upkeep. */
   mia: boolean
   miaReturnsAtTick: number | null
-  /** Named-tier upkeep failure: Scrip-denominated, interest-bearing, unpaid
-   *  Stores debt. Non-zero means non-deployable. */
+  /** Named-tier failure: interest-bearing Scrip debt. Non-zero == non-deployable. */
   debt: number
 }
 
-/** The stand-in campaign<->run interface (see STUBBED SEAM above). */
-export interface RosterPort {
-  factions(): Owner[]
-  units(faction: Owner): RosterUnitStub[]
-  removeUnit(faction: Owner, unitId: string): void
+const HEALTHY: UnitUpkeep = { mia: false, miaReturnsAtTick: null, debt: 0 }
+
+/** A unit joined with its upkeep status — the campaign's read-only roster VIEW
+ *  (port truth + ledger bookkeeping), for the UI and snapshots. */
+export type RosterUnitState = RosterUnitRef & UnitUpkeep
+
+/**
+ * The campaign's per-unit MIA/debt bookkeeping. A plain id-keyed store; entries
+ * are created lazily and default to HEALTHY, so a unit the economy has never
+ * failed to pay simply isn't in the map. Pure in-memory campaign state.
+ */
+export interface UpkeepLedger {
+  /** Current status for a unit (the healthy zero if it has never failed upkeep). */
+  status(faction: Owner, unitId: string): UnitUpkeep
   setMia(faction: Owner, unitId: string, returnsAtTick: number): void
   clearMia(faction: Owner, unitId: string): void
   setDebt(faction: Owner, unitId: string, debt: number): void
 }
 
-export interface RosterSeed {
-  faction: Owner
-  units: Array<{ id: string; tier: EconomyTier }>
+export function makeUpkeepLedger(): UpkeepLedger {
+  const byFaction = new Map<Owner, Map<string, UnitUpkeep>>()
+  const bucket = (faction: Owner) => {
+    let b = byFaction.get(faction)
+    if (!b) {
+      b = new Map()
+      byFaction.set(faction, b)
+    }
+    return b
+  }
+  const entry = (faction: Owner, unitId: string) => {
+    const b = bucket(faction)
+    let e = b.get(unitId)
+    if (!e) {
+      e = { ...HEALTHY }
+      b.set(unitId, e)
+    }
+    return e
+  }
+  return {
+    status: (faction, unitId) => byFaction.get(faction)?.get(unitId) ?? HEALTHY,
+    setMia: (faction, unitId, returnsAtTick) => {
+      const e = entry(faction, unitId)
+      e.mia = true
+      e.miaReturnsAtTick = returnsAtTick
+    },
+    clearMia: (faction, unitId) => {
+      const e = entry(faction, unitId)
+      e.mia = false
+      e.miaReturnsAtTick = null
+    },
+    setDebt: (faction, unitId, debt) => {
+      entry(faction, unitId).debt = debt
+    },
+  }
 }
 
-/** In-memory RosterPort seeded from world data. Not the real contract — see
- *  STUBBED SEAM above. */
-export function makeStubRosterPort(seeds: RosterSeed[]): RosterPort {
-  const rosters = new Map<Owner, RosterUnitStub[]>(
-    seeds.map((s) => [s.faction, s.units.map((u) => ({ id: u.id, tier: u.tier, mia: false, miaReturnsAtTick: null, debt: 0 }))]),
+// --- in-memory RosterPort (for factions with no live run) --------------------
+
+export interface RosterSeed {
+  faction: Owner
+  units: Array<{ id: string; tier: RosterTier }>
+}
+
+/**
+ * A real, in-memory implementation of the RosterPort — the one used for factions
+ * that have no live run-layer roster (the rival, and the player until the run
+ * layer is wired into the campaign). Seeded from world data. This is NOT a stub:
+ * it satisfies the same contract as the run-backed adapter (src/run/roster-port.ts);
+ * only its backing store differs (a plain array vs a live Run's roster).
+ */
+export function makeInMemoryRosterPort(seeds: RosterSeed[]): RosterPort {
+  const rosters = new Map<Owner, RosterUnitRef[]>(
+    seeds.map((s) => [s.faction, s.units.map((u) => ({ id: u.id, tier: u.tier }))]),
   )
   return {
     factions: () => [...rosters.keys()],
     units: (faction) => rosters.get(faction) ?? [],
     removeUnit: (faction, unitId) => {
       rosters.set(faction, (rosters.get(faction) ?? []).filter((u) => u.id !== unitId))
-    },
-    setMia: (faction, unitId, returnsAtTick) => {
-      const u = (rosters.get(faction) ?? []).find((u) => u.id === unitId)
-      if (u) {
-        u.mia = true
-        u.miaReturnsAtTick = returnsAtTick
-      }
-    },
-    clearMia: (faction, unitId) => {
-      const u = (rosters.get(faction) ?? []).find((u) => u.id === unitId)
-      if (u) {
-        u.mia = false
-        u.miaReturnsAtTick = null
-      }
-    },
-    setDebt: (faction, unitId, debt) => {
-      const u = (rosters.get(faction) ?? []).find((u) => u.id === unitId)
-      if (u) u.debt = debt
     },
   }
 }
@@ -130,7 +168,7 @@ export function computeIncome(ownedSettlementCount: number, config: EconomyConfi
 
 export interface UpkeepFailure {
   unitId: string
-  tier: EconomyTier
+  tier: RosterTier
   outcome: 'lost' | 'mia' | 'debt'
 }
 
@@ -140,23 +178,26 @@ export interface UpkeepFailure {
  * it touches anyone with a name — money runs out at the bottom of the
  * hierarchy, not the top. Ties within a tier break by unit id for a stable,
  * replayable order. A unit whose upkeep can't be covered fails per its tier:
- *   - levy: removed from the roster (spent).
- *   - supporting: MIA, returns automatically after config.miaReturnTicks.
- *   - named: added to its Scrip-denominated debt (interest applied by the
- *     caller — see tickEconomy); stays on the roster, non-deployable.
- * Mutates `port` and `bank.stores` in place.
+ *   - levy: removed from the roster (spent) — the one failure that crosses the
+ *     RosterPort into real run-layer state.
+ *   - supporting: MIA in the ledger, returns automatically after config.miaReturnTicks.
+ *   - named: added to its ledger Scrip-debt (interest applied by the caller —
+ *     see tickEconomy); stays on the roster, non-deployable.
+ * Reads tier through `port`; reads/writes MIA/debt through `ledger`. Mutates
+ * `port`, `ledger`, and `bank.stores` in place.
  */
 export function payUpkeep(
   port: RosterPort,
+  ledger: UpkeepLedger,
   faction: Owner,
   bank: Resources,
   currentTick: number,
   config: EconomyConfig,
 ): UpkeepFailure[] {
-  const priority: EconomyTier[] = ['named', 'supporting', 'levy']
+  const priority: RosterTier[] = ['named', 'supporting', 'levy']
   const active = port
     .units(faction)
-    .filter((u) => !u.mia)
+    .filter((u) => !ledger.status(faction, u.id).mia)
     .sort((a, b) => {
       const pa = priority.indexOf(a.tier)
       const pb = priority.indexOf(b.tier)
@@ -174,10 +215,11 @@ export function payUpkeep(
       port.removeUnit(faction, unit.id)
       failures.push({ unitId: unit.id, tier: 'levy', outcome: 'lost' })
     } else if (unit.tier === 'supporting') {
-      port.setMia(faction, unit.id, currentTick + config.miaReturnTicks)
+      ledger.setMia(faction, unit.id, currentTick + config.miaReturnTicks)
       failures.push({ unitId: unit.id, tier: 'supporting', outcome: 'mia' })
     } else {
-      port.setDebt(faction, unit.id, unit.debt + cost * config.debtConversionRate)
+      const debt = ledger.status(faction, unit.id).debt
+      ledger.setDebt(faction, unit.id, debt + cost * config.debtConversionRate)
       failures.push({ unitId: unit.id, tier: 'named', outcome: 'debt' })
     }
   }
@@ -201,6 +243,7 @@ export interface EconomyTickResult {
  */
 export function tickEconomy(
   port: RosterPort,
+  ledger: UpkeepLedger,
   faction: Owner,
   bank: Resources,
   ownedSettlementCount: number,
@@ -210,8 +253,9 @@ export function tickEconomy(
 ): EconomyTickResult {
   const miaReturned: string[] = []
   for (const u of port.units(faction)) {
-    if (u.mia && u.miaReturnsAtTick !== null && currentTick >= u.miaReturnsAtTick) {
-      port.clearMia(faction, u.id)
+    const s = ledger.status(faction, u.id)
+    if (s.mia && s.miaReturnsAtTick !== null && currentTick >= s.miaReturnsAtTick) {
+      ledger.clearMia(faction, u.id)
       miaReturned.push(u.id)
     }
   }
@@ -220,16 +264,17 @@ export function tickEconomy(
   bank.scrip += income.scrip
   bank.stores += income.stores
 
-  const failures = payUpkeep(port, faction, bank, currentTick, config)
+  const failures = payUpkeep(port, ledger, faction, bank, currentTick, config)
 
   for (const u of port.units(faction)) {
-    if (u.tier !== 'named' || u.debt <= 0) continue
-    const withInterest = Math.round(u.debt * (1 + config.debtInterestRate))
+    const debt = ledger.status(faction, u.id).debt
+    if (u.tier !== 'named' || debt <= 0) continue
+    const withInterest = Math.round(debt * (1 + config.debtInterestRate))
     if (bank.scrip >= withInterest) {
       bank.scrip -= withInterest
-      port.setDebt(faction, u.id, 0)
+      ledger.setDebt(faction, u.id, 0)
     } else {
-      port.setDebt(faction, u.id, withInterest)
+      ledger.setDebt(faction, u.id, withInterest)
     }
   }
 

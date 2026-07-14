@@ -3,7 +3,8 @@ import { Campaign } from '../src/campaign/campaign'
 import { loadWorld } from '../src/campaign/world'
 import {
   computeIncome,
-  makeStubRosterPort,
+  makeInMemoryRosterPort,
+  makeUpkeepLedger,
   payUpkeep,
   rivalExpandDecision,
   tickEconomy,
@@ -105,74 +106,71 @@ describe('economy — determinism', () => {
 
 describe('economy — upkeep failure tiers', () => {
   it('levy: lost permanently when Stores cannot cover its upkeep, other units untouched', () => {
-    const port = makeStubRosterPort([
+    const port = makeInMemoryRosterPort([
       { faction: 'player', units: [{ id: 'levy', tier: 'levy' }, { id: 'named', tier: 'named' }] },
     ])
+    const ledger = makeUpkeepLedger()
     const bank: Resources = { scrip: 100, stores: 1 } // covers named (5)? no — not enough for either at cost, but priority is named first
     // named costs 5, supporting 3, levy 2 — bank.stores=1 can't cover named (5) either.
-    payUpkeep(port, 'player', bank, 1, CONFIG)
+    payUpkeep(port, ledger, 'player', bank, 1, CONFIG)
     const units = port.units('player')
-    expect(units.find((u) => u.id === 'levy')).toBeUndefined() // gone
-    expect(units.find((u) => u.id === 'named')?.debt).toBeGreaterThan(0) // named failed differently
+    expect(units.find((u) => u.id === 'levy')).toBeUndefined() // gone (removal crosses the port into roster state)
+    expect(ledger.status('player', 'named').debt).toBeGreaterThan(0) // named failed differently (ledger-side)
   })
 
   it('levy failure does not affect a sibling levy that WAS paid', () => {
-    const port = makeStubRosterPort([
+    const port = makeInMemoryRosterPort([
       { faction: 'player', units: [{ id: 'levy-a', tier: 'levy' }, { id: 'levy-b', tier: 'levy' }] },
     ])
     const bank: Resources = { scrip: 0, stores: 2 } // covers exactly one levy (id order: levy-a first)
-    payUpkeep(port, 'player', bank, 1, CONFIG)
+    payUpkeep(port, makeUpkeepLedger(), 'player', bank, 1, CONFIG)
     const units = port.units('player')
     expect(units.find((u) => u.id === 'levy-a')).toBeDefined() // paid
     expect(units.find((u) => u.id === 'levy-b')).toBeUndefined() // lost
   })
 
   it('supporting: goes MIA when unpaid, auto-returns after miaReturnTicks and rejoins upkeep', () => {
-    const port = makeStubRosterPort([{ faction: 'player', units: [{ id: 'support', tier: 'supporting' }] }])
+    const port = makeInMemoryRosterPort([{ faction: 'player', units: [{ id: 'support', tier: 'supporting' }] }])
+    const ledger = makeUpkeepLedger()
     const zeroBank: Resources = { scrip: 100, stores: 0 }
-    payUpkeep(port, 'player', zeroBank, 1, CONFIG)
-    let unit = port.units('player')[0]
-    expect(unit.mia).toBe(true)
-    expect(unit.miaReturnsAtTick).toBe(1 + CONFIG.miaReturnTicks)
+    payUpkeep(port, ledger, 'player', zeroBank, 1, CONFIG)
+    expect(ledger.status('player', 'support').mia).toBe(true) // MIA is ledger-side, never on the port
+    expect(ledger.status('player', 'support').miaReturnsAtTick).toBe(1 + CONFIG.miaReturnTicks)
 
     // Not due back yet: still MIA, and (being MIA) excluded from upkeep.
     const flushBank: Resources = { scrip: 0, stores: 100 }
-    const result = tickEconomy(port, 'player', flushBank, 0, 1 + CONFIG.miaReturnTicks - 1, CONFIG, makeCampaignRng(1))
+    const result = tickEconomy(port, ledger, 'player', flushBank, 0, 1 + CONFIG.miaReturnTicks - 1, CONFIG, makeCampaignRng(1))
     expect(result.miaReturned).toEqual([])
-    unit = port.units('player')[0]
-    expect(unit.mia).toBe(true)
+    expect(ledger.status('player', 'support').mia).toBe(true)
 
     // Due back: rejoins, and (now active) is charged upkeep again this tick.
-    const result2 = tickEconomy(port, 'player', flushBank, 0, 1 + CONFIG.miaReturnTicks, CONFIG, makeCampaignRng(1))
+    const result2 = tickEconomy(port, ledger, 'player', flushBank, 0, 1 + CONFIG.miaReturnTicks, CONFIG, makeCampaignRng(1))
     expect(result2.miaReturned).toEqual(['support'])
-    unit = port.units('player')[0]
-    expect(unit.mia).toBe(false)
-    expect(unit.miaReturnsAtTick).toBeNull()
+    expect(ledger.status('player', 'support').mia).toBe(false)
+    expect(ledger.status('player', 'support').miaReturnsAtTick).toBeNull()
   })
 
   it('named: unpaid Stores converts to interest-bearing Scrip debt; stays on roster, non-deployable (debt > 0)', () => {
-    const port = makeStubRosterPort([{ faction: 'player', units: [{ id: 'named', tier: 'named' }] }])
+    const port = makeInMemoryRosterPort([{ faction: 'player', units: [{ id: 'named', tier: 'named' }] }])
+    const ledger = makeUpkeepLedger()
     const bank: Resources = { scrip: 0, stores: 0 }
-    tickEconomy(port, 'player', bank, 0, 1, CONFIG, makeCampaignRng(1))
-    let unit = port.units('player')[0]
-    expect(unit).toBeDefined() // still on the roster
+    tickEconomy(port, ledger, 'player', bank, 0, 1, CONFIG, makeCampaignRng(1))
+    expect(port.units('player')[0]).toBeDefined() // still on the roster (removal never happened)
     // Interest accrues the SAME tick debt is first incurred (one pass, no rng):
     // round(5 * 1.1) = 6.
-    expect(unit.debt).toBe(Math.round(CONFIG.upkeepCost.named * (1 + CONFIG.debtInterestRate)))
+    expect(ledger.status('player', 'named').debt).toBe(Math.round(CONFIG.upkeepCost.named * (1 + CONFIG.debtInterestRate)))
 
     // Next tick, still can't pay: the new unpaid amount is added to existing
     // debt, then interest compounds on the total — deterministic, no rng.
-    tickEconomy(port, 'player', bank, 0, 2, CONFIG, makeCampaignRng(1))
-    unit = port.units('player')[0]
+    tickEconomy(port, ledger, 'player', bank, 0, 2, CONFIG, makeCampaignRng(1))
     const expected = Math.round((6 + CONFIG.upkeepCost.named) * (1 + CONFIG.debtInterestRate))
-    expect(unit.debt).toBe(expected) // round(11 * 1.1) = 12
+    expect(ledger.status('player', 'named').debt).toBe(expected) // round(11 * 1.1) = 12
 
     // Once the faction can afford it, debt auto-clears and the unit is
     // deployable again (debt === 0 is the deployability signal here).
     const flushBank: Resources = { scrip: 1000, stores: 1000 }
-    tickEconomy(port, 'player', flushBank, 0, 3, CONFIG, makeCampaignRng(1))
-    unit = port.units('player')[0]
-    expect(unit.debt).toBe(0)
+    tickEconomy(port, ledger, 'player', flushBank, 0, 3, CONFIG, makeCampaignRng(1))
+    expect(ledger.status('player', 'named').debt).toBe(0)
   })
 })
 
@@ -242,33 +240,41 @@ describe('economy — rival spending policy', () => {
   })
 })
 
-// --- the stub seam: "the stub works", not "the contract is right" ----------
+// --- the real contract: the port carries only run-owned truth ---------------
 
-describe('economy — RosterPort stub seam', () => {
-  it('the placeholder port is called with the expected shape and produces deterministic MIA-return behaviour', () => {
-    const port = makeStubRosterPort([
+describe('economy — RosterPort contract (in-memory implementation)', () => {
+  it('the port surface is narrow: identity + tier + removal, no MIA/debt leaking across it', () => {
+    const port = makeInMemoryRosterPort([
       { faction: 'player', units: [{ id: 'u1', tier: 'supporting' }] },
     ])
     expect(port.factions()).toEqual(['player'])
-    expect(port.units('player')).toEqual([{ id: 'u1', tier: 'supporting', mia: false, miaReturnsAtTick: null, debt: 0 }])
+    // Only run-owned truth crosses the boundary — no mia/debt fields on the port.
+    expect(port.units('player')).toEqual([{ id: 'u1', tier: 'supporting' }])
 
-    port.setMia('player', 'u1', 5)
-    expect(port.units('player')[0]).toMatchObject({ mia: true, miaReturnsAtTick: 5 })
-
-    port.clearMia('player', 'u1')
-    expect(port.units('player')[0]).toMatchObject({ mia: false, miaReturnsAtTick: null })
-
-    port.setDebt('player', 'u1', 42)
-    expect(port.units('player')[0].debt).toBe(42)
-
-    port.removeUnit('player', 'u1')
+    port.removeUnit('player', 'u1') // the one mutation the port allows (permadeath)
     expect(port.units('player')).toEqual([])
+  })
+
+  it('the ledger holds MIA/debt campaign-side, keyed to the same unit ids', () => {
+    const ledger = makeUpkeepLedger()
+    // A unit never failed is simply healthy — no entry needed.
+    expect(ledger.status('player', 'u1')).toEqual({ mia: false, miaReturnsAtTick: null, debt: 0 })
+
+    ledger.setMia('player', 'u1', 5)
+    expect(ledger.status('player', 'u1')).toMatchObject({ mia: true, miaReturnsAtTick: 5 })
+    ledger.clearMia('player', 'u1')
+    expect(ledger.status('player', 'u1')).toMatchObject({ mia: false, miaReturnsAtTick: null })
+
+    ledger.setDebt('player', 'u1', 42)
+    expect(ledger.status('player', 'u1').debt).toBe(42)
+    // Ledger and port are independent: a unit id in one need not exist in the other.
+    expect(ledger.status('player', 'ghost').debt).toBe(0)
   })
 
   it('seeding twice never lets one instance leak into another (no shared mutable arrays)', () => {
     const seeds = [{ faction: 'player', units: [{ id: 'u1', tier: 'levy' as const }] }]
-    const a = makeStubRosterPort(seeds)
-    const b = makeStubRosterPort(seeds)
+    const a = makeInMemoryRosterPort(seeds)
+    const b = makeInMemoryRosterPort(seeds)
     a.removeUnit('player', 'u1')
     expect(a.units('player')).toEqual([])
     expect(b.units('player')).toHaveLength(1) // untouched

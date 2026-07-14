@@ -16,13 +16,15 @@ import { makeCampaignRng, type CampaignRng } from './rng'
 import { autoResolve } from './resolve'
 import {
   ECONOMY,
-  makeStubRosterPort,
+  makeInMemoryRosterPort,
+  makeUpkeepLedger,
   rivalExpandDecision,
   tickEconomy,
   type EconomyConfig,
   type Resources,
   type RosterPort,
-  type RosterUnitStub,
+  type RosterUnitState,
+  type UpkeepLedger,
 } from './economy'
 import { buildAdjacency, nextHop, shortestPaths, type Adjacency, type LoadedWorld } from './world'
 import { PLAYER, type CampaignEvent, type NodeId, type Order, type Owner, type Party, type ResolveBattle, type World, type WorldNode } from './types'
@@ -58,6 +60,9 @@ export class Campaign {
   private readonly rng: CampaignRng
   private readonly resolveBattle: ResolveBattle
   private readonly rosterPort: RosterPort
+  // Campaign-owned MIA/debt bookkeeping (does NOT cross the RosterPort — see
+  // economy.ts's ROSTER SEAM note). Keyed by (faction, unit id) alongside the port.
+  private readonly ledger: UpkeepLedger = makeUpkeepLedger()
   private readonly econ: EconomyConfig
   private readonly adj: Adjacency
   private readonly nodeById: Map<NodeId, WorldNode>
@@ -67,7 +72,7 @@ export class Campaign {
     this.seed = seed
     this.rng = makeCampaignRng(seed)
     this.resolveBattle = opts.resolveBattle ?? autoResolve
-    this.rosterPort = opts.rosterPort ?? makeStubRosterPort(loaded.rosterSeeds)
+    this.rosterPort = opts.rosterPort ?? makeInMemoryRosterPort(loaded.rosterSeeds)
     this.econ = opts.economy ?? ECONOMY
     this.ownership = new Map(loaded.ownership) // clone: source of truth for territory
     this.parties = loaded.parties.map((p) => ({ ...p })) // clone
@@ -94,7 +99,7 @@ export class Campaign {
   private economyStep(): void {
     for (const faction of this.rosterPort.factions()) {
       const bank = this.resourceBank(faction)
-      const result = tickEconomy(this.rosterPort, faction, bank, this.ownedCount(faction), this.turnCount, this.econ, this.rng)
+      const result = tickEconomy(this.rosterPort, this.ledger, faction, bank, this.ownedCount(faction), this.turnCount, this.econ, this.rng)
       for (const f of result.failures) {
         const name = this.factionName(faction)
         if (f.outcome === 'lost') this.event('note', `${name} cannot feed a levy — ${f.unitId} is lost.`)
@@ -245,9 +250,10 @@ export class Campaign {
     return { ...this.resourceBank(faction) }
   }
 
-  /** Read-only copy of a faction's roster stub (see economy.ts's STUBBED SEAM). */
-  rosterOf(faction: Owner): RosterUnitStub[] {
-    return this.rosterPort.units(faction).map((u) => ({ ...u }))
+  /** Read-only roster VIEW: port truth (id, tier) joined with this campaign's
+   *  ledger bookkeeping (MIA, debt). */
+  rosterOf(faction: Owner): RosterUnitState[] {
+    return this.rosterPort.units(faction).map((u) => ({ ...u, ...this.ledger.status(faction, u.id) }))
   }
 
   /** Node ids the player can travel to (reachable, excluding its current tile). */
@@ -314,7 +320,7 @@ export class Campaign {
         .sort()
         .map((faction) => ({
           faction,
-          units: [...this.rosterPort.units(faction)].sort((a, b) => (a.id < b.id ? -1 : 1)),
+          units: this.rosterOf(faction).sort((a, b) => (a.id < b.id ? -1 : 1)),
         })),
       events: this.events.map((e) => ({ ...e })),
       choiceLog: this.choiceLog.map((o) => ({ ...o })),

@@ -1,5 +1,5 @@
 {
-  "_note": "Campaign world definition: the strategic node-graph map. Settlements are ownable (defense = static difficulty of taking the place, NOT a garrison economy); waypoints are neutral junctions. Edge cost = travel time. x/y in [0,1] are layout only. Owners: player | neutral | a faction id. Exactly one party ROAMS (the blight warband); static factions may only OWN. Each party's `roster` seeds the economy's stub roster (see src/campaign/economy.ts) — upkeep tiers only, no stats.",
+  "_note": "Campaign world definition: the strategic node-graph map. Settlements are ownable (defense = static difficulty of taking the place, NOT a garrison economy); waypoints are neutral junctions. Edge cost = travel time. x/y in [0,1] are layout only. Owners: player | neutral | a faction id. Exactly one party ROAMS (the blight warband); static factions may only OWN. Each party's `roster` seeds the campaign's in-memory RosterPort (see src/campaign/economy.ts) — upkeep tiers only, no stats.",
   "factions": [
     { "id": "player", "name": "Deepwood Elves", "color": "#8fe38f" },
     { "id": "blight", "name": "The Blight", "color": "#c77dff" },

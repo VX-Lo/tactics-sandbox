@@ -179,23 +179,45 @@ Believed shipped:
 - Campaign economy (src/campaign/economy.ts): Scrip/Stores accumulation, flat
   per-node income with seeded jitter, roster upkeep with tiered failure, capture-cost
   gate, and the rival's threshold+reaction-lag spending policy. Supporting middle tier
-  — narrowly: only its MIA-state upkeep-failure mechanic exists on the campaign's own
-  stub roster (economy.RosterUnitStub); no stat/ability divergence for the tier
-  anywhere, and the run-layer `Tier` union is untouched (see section 4). Data:
-  data/economy.json (upkeep costs, node base yield, rival policy thresholds, MIA
-  return duration); data/world.json parties gained an optional `roster` field that
-  seeds it.
+  — narrowly: only its MIA-state upkeep-failure mechanic exists; no stat/ability
+  divergence for the tier anywhere, and the run-layer `Tier` union is untouched (see
+  section 4). Data: data/economy.json (upkeep costs, node base yield, rival policy
+  thresholds, MIA return duration); data/world.json parties gained an optional
+  `roster` field that seeds it.
+- Campaign<->run roster contract (SHIPPED — was the Kaname pass). The RosterPort
+  interface now lives in src/contracts/roster.ts, a layer-neutral module both sides
+  import (dependency inversion), so the campaign reaches run-layer roster state
+  without importing the run module. The "one system or two" call: TWO systems joined
+  by unit id. The port carries ONLY run-owned truth — factions(), units()->{id,tier},
+  removeUnit() (a levy's permadeath). MIA countdown and Scrip debt are campaign-only
+  bookkeeping and DO NOT cross the port: they live in src/campaign/economy.ts's
+  UpkeepLedger (makeUpkeepLedger), keyed by unit id. WHY: MIA/debt are meaningless
+  without Scrip/Stores; keeping them off the port stops any implementer writing money
+  concepts onto run-layer units and keeps the run layer runnable with no notion of
+  Scrip. Two real port implementations: makeInMemoryRosterPort (world-data-seeded,
+  the default, for factions with no live run — the rival, and the player pre-wiring)
+  and makeRunRosterPort (src/run/roster-port.ts — the real adapter over a live Run's
+  roster). Injected via CampaignOptions.rosterPort. Guarded by test/boundary.test.ts
+  (fails the build if src/engine or src/run ever imports src/campaign).
+
+AUDIT (this pass, diff 8624923..HEAD on ai/battle/content/movement/types/run.ts):
+CLEAN, no fixes needed. Engine vocabulary was extended additively (Tier is now
+table-driven via TIERS/DEFAULT_TIER/TIER_LABELS; action-economy budgets and
+attackBudget replace hasMoved/hasActed; undo adds commitment.ts as a new primitive,
+not a restructure). No engine/run file imports src/campaign. Determinism held: no new
+Math.random/wall-clock; undo is authoring-time and never logged; the AI deliberately
+ends its activation after one action to keep pre-economy trajectories byte-identical;
+NameRegistry uses a separate derived sub-seed so it can't perturb the encounter/
+progression streams.
 
 In flight / uncertain — VERIFY against repo before building on:
-- Intra-unit undo (commit-on-reveal) — drafted; confirm whether it shipped.
+- Intra-unit undo (commit-on-reveal) — SHIPPED (battle.ts activation/undo/canUndo,
+  commitment.ts, test/undo.test.ts). No longer uncertain.
 - Random-seed-recorded-to-state — confirm implemented.
-- NEEDS A KANAME PASS: the campaign<->run-layer roster contract. economy.ts's
-  `RosterPort` is a deliberate stub (in-memory, seeded from data/world.json, swappable
-  via CampaignOptions.rosterPort) standing in for reading a unit's real tier and
-  mutating real run-layer roster state (remove/MIA/debt). It works and is tested, but
-  the real contract — how the campaign layer actually reaches roster units that live in
-  the run layer without violating "campaign imports nothing from tactics internals" —
-  is not designed. Do not extend the stub into that contract; design it fresh.
+- NOTE (pre-existing, out of scope this pass): test/combat.test.ts has 3 failing
+  tests in resolveCombat sequencing (counters/doubles/miss damage). They predate and
+  are unrelated to this pass (combat.ts was not in the audited batch). Not a
+  determinism/boundary issue — a combat-resolution bug for a future combat pass.
 
 ============================================================
 ## 8. DEFERRED — see cool_ideas.txt
