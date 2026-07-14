@@ -1,0 +1,158 @@
+/* Launcher screen — front door before Campaign / Quick Battle / Tools.
+   Visually separate from the in-game UI on purpose (see README). Everything
+   here is restylable; only the data-hook attributes in launcher.html are
+   load-bearing for launcher.js. */
+
+:root {
+  --launcher-bg-top: oklch(17% 0.02 250);
+  --launcher-bg-mid: oklch(13% 0.018 248);
+  --launcher-bg-bottom: oklch(10% 0.015 244);
+  --launcher-ink: oklch(92% 0.01 250);
+  --launcher-ink-dim: oklch(60% 0.02 250);
+  --launcher-ink-dimmer: oklch(55% 0.02 250);
+
+  /* same lightness/chroma, rotated hue — keep all three even though only
+     ember is active today, see README */
+  --launcher-accent-ember: #d9a15b;
+  --launcher-accent-frost: #93b7c9;
+  --launcher-accent-moss: #8fa97e;
+  --launcher-accent: var(--launcher-accent-ember);
+}
+
+* { box-sizing: border-box; }
+
+.launcher {
+  width: 100vw;
+  height: 100vh;
+  min-width: 1024px;
+  min-height: 680px;
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(180deg, var(--launcher-bg-top) 0%, var(--launcher-bg-mid) 55%, var(--launcher-bg-bottom) 100%);
+  font-family: "IBM Plex Sans", sans-serif;
+  color: var(--launcher-ink);
+}
+
+/* --- backdrop (decorative, no behavior) --- */
+
+.launcher-backdrop { position: absolute; inset: 0; pointer-events: none; }
+
+.launcher-island {
+  position: absolute;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.045);
+  animation: launcherDriftIsland 46s ease-in-out infinite alternate;
+}
+.launcher-island--a { top: 16%; left: 12%; width: 86px; height: 16px; }
+.launcher-island--b { top: 24%; left: 74%; width: 60px; height: 12px; background: rgba(255, 255, 255, 0.035); animation-duration: 60s; animation-direction: alternate-reverse; }
+
+.launcher-ridge { position: absolute; bottom: 0; left: 0; width: 100%; }
+.launcher-ridge--far {
+  height: 24vh;
+  background: #080b0f;
+  clip-path: polygon(0% 100%, 0% 55%, 8% 62%, 16% 40%, 25% 58%, 34% 35%, 44% 62%, 55% 48%, 64% 66%, 74% 42%, 84% 60%, 93% 44%, 100% 58%, 100% 100%);
+}
+.launcher-ridge--near {
+  height: 15vh;
+  background: #050709;
+  clip-path: polygon(0% 100%, 0% 70%, 10% 50%, 20% 68%, 30% 45%, 42% 66%, 52% 50%, 62% 70%, 72% 48%, 82% 64%, 92% 52%, 100% 68%, 100% 100%);
+}
+
+.launcher-snowfield { position: absolute; inset: 0; }
+.launcher-snow {
+  position: absolute;
+  top: -8px;
+  border-radius: 50%;
+  background: #e7edf3;
+  animation-name: launcherSnowfall;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+.launcher-scanlines {
+  position: absolute;
+  inset: 0;
+  mix-blend-mode: overlay;
+  opacity: 0.5;
+  background: repeating-linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 0px, rgba(255, 255, 255, 0.03) 1px, transparent 1px, transparent 4px);
+  animation: launcherScanlineDrift 7s linear infinite;
+}
+
+.launcher-vignette {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 50% 45%, transparent 42%, rgba(0, 0, 0, 0.5) 100%);
+}
+
+/* --- content --- */
+
+.launcher-content {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  height: 100%;
+  padding: 56px 64px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.launcher-topbar { display: flex; justify-content: space-between; align-items: flex-start; }
+
+.launcher-signal { display: flex; align-items: center; gap: 12px; }
+.launcher-signal-bars { display: flex; align-items: flex-end; gap: 3px; height: 18px; }
+.launcher-signal-bars span { width: 3px; background: var(--launcher-accent); animation: launcherSignalPulse 1.6s ease-in-out infinite; }
+.launcher-signal-bars span:nth-child(1) { height: 6px; animation-delay: 0s; }
+.launcher-signal-bars span:nth-child(2) { height: 10px; animation-delay: 0.15s; }
+.launcher-signal-bars span:nth-child(3) { height: 14px; animation-delay: 0.3s; }
+.launcher-signal-bars span:nth-child(4) { height: 18px; animation-delay: 0.45s; }
+.launcher-signal-label { font-family: "IBM Plex Mono", monospace; font-size: 11px; letter-spacing: 0.12em; color: var(--launcher-ink-dim); text-transform: uppercase; }
+
+.launcher-build-tag { font-family: "IBM Plex Mono", monospace; font-size: 12px; letter-spacing: 0.05em; color: var(--launcher-ink-dimmer); }
+
+.launcher-title-block { display: flex; flex-direction: column; gap: 16px; }
+.launcher-wordmark {
+  font-family: "IBM Plex Sans", sans-serif;
+  font-weight: 600;
+  font-size: clamp(56px, 9vw, 132px);
+  line-height: 0.94;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+  margin: 0;
+  /* dimmed on purpose — full-bright large text read as too harsh against the dark bg */
+  color: #ffffffb2;
+}
+
+.launcher-nav { display: flex; flex-direction: column; gap: 16px; }
+.launcher-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: fit-content;
+  min-width: 280px;
+  padding: 10px 2px;
+  border: none;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  background: none;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+}
+.launcher-nav-item:hover,
+.launcher-nav-item:focus-visible { border-bottom-color: var(--launcher-accent); }
+.launcher-nav-item:focus-visible { outline: none; }
+
+.launcher-nav-index { font-family: "IBM Plex Mono", monospace; font-size: 13px; color: var(--launcher-ink-dimmer); width: 20px; }
+.launcher-nav-label { font-family: "IBM Plex Sans", sans-serif; font-size: 20px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: oklch(90% 0.01 250); }
+.launcher-nav-item--primary .launcher-nav-label { font-size: 26px; font-weight: 600; }
+
+.launcher-nav-ready { display: flex; align-items: center; gap: 8px; margin-left: 4px; font-family: "IBM Plex Mono", monospace; font-size: 10px; letter-spacing: 0.15em; color: var(--launcher-accent); text-transform: uppercase; }
+.launcher-nav-led { width: 6px; height: 6px; border-radius: 50%; background: var(--launcher-accent); animation: launcherSignalPulse 2s ease-in-out infinite; }
+
+/* --- keyframes --- */
+
+@keyframes launcherSnowfall { 0% { transform: translateY(-8vh) translateX(0); } 100% { transform: translateY(112vh) translateX(24px); } }
+@keyframes launcherScanlineDrift { 0% { background-position: 0 0; } 100% { background-position: 0 48px; } }
+@keyframes launcherSignalPulse { 0%, 100% { transform: scaleY(0.35); opacity: 0.45; } 50% { transform: scaleY(1); opacity: 1; } }
+@keyframes launcherDriftIsland { 0% { transform: translateX(0); } 100% { transform: translateX(36px); } }

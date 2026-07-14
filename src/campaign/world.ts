@@ -95,7 +95,8 @@ export function loadWorld(raw: unknown): LoadedWorld {
         uo.tier === 'levy' || uo.tier === 'supporting' || uo.tier === 'named',
         `party "${o.id}" roster unit "${uo.id}" bad tier`,
       )
-      return { id: uo.id as string, tier: uo.tier as EconomyTier }
+      const name = typeof uo.name === 'string' ? (uo.name as string) : (uo.id as string)
+      return { id: uo.id as string, tier: uo.tier as EconomyTier, name }
     })
     rosterSeeds.push({ faction, units })
   }

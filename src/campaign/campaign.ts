@@ -12,8 +12,9 @@
 // time advance (time is folded into the player's travel edge). Ownership is
 // the source of truth for territory.
 
-import { makeCampaignRng, type CampaignRng } from './rng'
+import { hashString, makeCampaignRng, type CampaignRng } from './rng'
 import { autoResolve } from './resolve'
+import type { RosterUnitRef } from '../contracts/roster'
 import {
   ECONOMY,
   makeInMemoryRosterPort,
@@ -27,8 +28,9 @@ import {
   type UpkeepLedger,
 } from './economy'
 import { buildAdjacency, nextHop, shortestPaths, type Adjacency, type LoadedWorld } from './world'
-import { PLAYER, type CampaignEvent, type NodeId, type Order, type Owner, type Party, type ResolveBattle, type World, type WorldNode } from './types'
+import { NEUTRAL, PLAYER, type CampaignEvent, type NodeId, type Order, type Owner, type Party, type ResolveBattle, type World, type WorldNode } from './types'
 import {
+  battleCasualtyEvents,
   captureBlockedEvent,
   captureLostEvent,
   captureWonEvent,
@@ -37,6 +39,19 @@ import {
   upkeepFailureEvents,
   type CampaignLogEvent,
 } from './log'
+
+/**
+ * Named units present in `before` (roster snapshot taken as the battle was
+ * requested) that are absent from `after` — "went in, didn't return." This is
+ * the ONLY channel by which the campaign learns battle casualties by name: it
+ * reads run-owned truth back through the port and diffs, rather than receiving
+ * named detail on the (aggregate-only) BattleResult. Levies fall generically via
+ * upkeep and carry no name; only named units are mourned here.
+ */
+export function fallenNamed(before: RosterUnitRef[], after: RosterUnitRef[]): string[] {
+  const survivors = new Set(after.map((u) => u.id))
+  return before.filter((u) => u.tier === 'named' && !survivors.has(u.id)).map((u) => u.name)
+}
 
 /** How many chronicle entries a campaign keeps — "a few dozen," no persistence
  *  beyond the session needed. Presentation caps its own visible window further. */
@@ -200,17 +215,37 @@ export class Campaign {
     bank.scrip -= this.econ.captureCost
     this.expandStreak.set(party.faction, 0) // acted on the surplus; the lag resets
 
-    const seed = this.rng.nextSeed()
-    const outcome = this.resolveBattle({ strength: party.strength }, { strength: node.defense }, seed)
+    // Commit the known roster BEFORE the fight, so we can diff for named
+    // casualties after (see fallenNamed) — the campaign learns who fell through
+    // the port, never from the aggregate result.
+    const before = this.rosterPort.units(party.faction).map((u) => ({ ...u }))
 
-    if (outcome.winner === 'attacker') {
-      party.strength += outcome.attackerDelta // <= 0; auto-resolver keeps it >= 1
+    // Assemble the request from what the campaign tracks: WHICH forces (by
+    // faction), WHERE (the node's stable terrain seed), and the battle seed. The
+    // defender is the settlement's static defense, owned by whoever holds it.
+    const request = {
+      attacker: { faction: party.faction, strength: party.strength },
+      defender: { faction: this.ownership.get(node.id) ?? NEUTRAL, strength: node.defense },
+      terrainSeed: hashString(node.id),
+      seed: this.rng.nextSeed(),
+    }
+    const result = this.resolveBattle(request)
+
+    if (result.winner === 'attacker') {
+      party.strength += result.attackerDelta // <= 0; a resolver keeps the victor >= 1
       this.ownership.set(node.id, party.faction) // the payoff: territory flips, persists
       this.log(captureWonEvent(party.faction, node.id, party.strength))
     } else {
       this.removeParty(party.id) // the defeated party is removed from the map
       this.log(captureLostEvent(party.faction, node.id))
     }
+
+    // Read the roster back and mourn any named unit that didn't return. With the
+    // aggregate auto-resolver this is a no-op (it applies no unit consequences —
+    // that mapping is deferred, CLAUDE.md); it goes live once a resolver (the
+    // hand-fight path) actually removes fallen units run-side.
+    const after = this.rosterPort.units(party.faction)
+    for (const e of battleCasualtyEvents(party.faction, fallenNamed(before, after))) this.log(e)
   }
 
   // --- queries (the map view + tests read these) -----------------------------

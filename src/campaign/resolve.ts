@@ -1,23 +1,27 @@
-// The conflict resolver (pillar 6) — the STUB behind the `ResolveBattle` socket.
-// This is the strategic layer's equivalent of the run layer's heal-to-full
-// placeholder: a deterministic stand-in for the real tactics engine, which will
-// later implement this SAME interface under this SAME contract.
+// AUTO-RESOLVE: one of the two resolvers behind the `ResolveBattle` socket
+// (contracts/battle.ts). Fast, headless, aggregate — the deterministic stand-in
+// for real tactics, used for rival-vs-rival fights, player-delegated battles, and
+// the overnight balance sim. The real HAND-FIGHT resolver (src/run/battle-resolver.ts)
+// satisfies the SAME contract; the campaign never learns which one answered.
 //
-// THE VARIANCE RULE (load-bearing, must survive the real engine too):
+// THE VARIANCE RULE (load-bearing, CLAUDE.md 1a):
 //   - The STRONGER force ALWAYS wins. The seed NEVER decides a non-tie winner.
 //   - Equal strength is the ONLY case the seed may decide the winner.
 //   - The seed decides only the MARGIN — the casualties the victor suffers.
 // This is the anti-save-scum guarantee: you cannot re-roll a battle you were
 // always going to win or lose; bring enough force and the outcome is settled, and
-// the dice only cost you blood. The real engine must honour the same rule.
+// the dice only cost you blood. (The hand-fight path's winner comes from PLAY,
+// which is variance-rule-legal because the player chose to expose themselves.)
 
 import { makeCampaignRng } from './rng'
-import type { BattleParty, BattleOutcome } from './types'
+import type { BattleRequest, BattleResult } from '../contracts/battle'
 
-export function autoResolve(attacker: BattleParty, defender: BattleParty, seed: number): BattleOutcome {
+export function autoResolve(request: BattleRequest): BattleResult {
+  const { attacker, defender, seed } = request
   const rng = makeCampaignRng(seed)
 
   // WINNER: strictly by strength. A tie — and ONLY a tie — is broken by the seed.
+  // (terrainSeed is deliberately unused: aggregate math never simulates ground.)
   let winnerIsAttacker: boolean
   if (attacker.strength > defender.strength) winnerIsAttacker = true
   else if (defender.strength > attacker.strength) winnerIsAttacker = false

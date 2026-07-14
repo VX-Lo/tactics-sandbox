@@ -13,6 +13,18 @@ export interface CampaignRng {
   nextSeed(): number
 }
 
+/** Deterministic 31-bit hash of a string (FNV-1a). Used to derive a STABLE
+ *  per-node terrain seed for a BattleRequest — the same place always fights on
+ *  the same ground, independent of the battle's own draw. Not for gameplay RNG. */
+export function hashString(s: string): number {
+  let h = 0x811c9dc5
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i)
+    h = Math.imul(h, 0x01000193)
+  }
+  return (h >>> 0) % 0x7fffffff
+}
+
 export function makeCampaignRng(seed: number): CampaignRng {
   let state = seed >>> 0
 

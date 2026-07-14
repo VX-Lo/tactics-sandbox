@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet">
+  <style>
+    @keyframes snowfall { 0% { transform: translateY(-8vh) translateX(0); } 100% { transform: translateY(112vh) translateX(24px); } }
+    @keyframes scanlineDrift { 0% { background-position: 0 0; } 100% { background-position: 0 48px; } }
+    @keyframes flicker { 0%, 91%, 100% { opacity: 1; } 92% { opacity: 0.8; } 93% { opacity: 1; } 96% { opacity: 0.88; } 97% { opacity: 1; } }
+    @keyframes signalPulse { 0%, 100% { transform: scaleY(0.35); opacity: 0.45; } 50% { transform: scaleY(1); opacity: 1; } }
+    @keyframes driftIsland { 0% { transform: translateX(0); } 100% { transform: translateX(36px); } }
+    body { margin: 0; background: #0b0f14; }
+  </style>
+</helmet>
+<div style="width:100vw; height:100vh; min-width:1024px; min-height:680px; position:relative; overflow:hidden; background:linear-gradient(180deg, oklch(17% 0.02 250) 0%, oklch(13% 0.018 248) 55%, oklch(10% 0.015 244) 100%); font-family:'IBM Plex Sans', sans-serif; color:oklch(92% 0.01 250);">
+
+  <!-- distant floating islands -->
+  <div style="position:absolute; top:16%; left:12%; width:86px; height:16px; border-radius:50%; background:rgba(255,255,255,0.045); animation:driftIsland 46s ease-in-out infinite alternate; pointer-events:none;"></div>
+  <div style="position:absolute; top:24%; left:74%; width:60px; height:12px; border-radius:50%; background:rgba(255,255,255,0.035); animation:driftIsland 60s ease-in-out infinite alternate-reverse; pointer-events:none;"></div>
+
+  <!-- ridgeline silhouettes -->
+  <div style="position:absolute; bottom:0; left:0; width:100%; height:24vh; background:#080b0f; clip-path:polygon(0% 100%, 0% 55%, 8% 62%, 16% 40%, 25% 58%, 34% 35%, 44% 62%, 55% 48%, 64% 66%, 74% 42%, 84% 60%, 93% 44%, 100% 58%, 100% 100%); pointer-events:none;"></div>
+  <div style="position:absolute; bottom:0; left:0; width:100%; height:15vh; background:#050709; clip-path:polygon(0% 100%, 0% 70%, 10% 50%, 20% 68%, 30% 45%, 42% 66%, 52% 50%, 62% 70%, 72% 48%, 82% 64%, 92% 52%, 100% 68%, 100% 100%); pointer-events:none;"></div>
+
+  <!-- snow -->
+  <sc-for list="{{snowParticles}}" as="p" hint-placeholder-count="24">
+    <div style="position:absolute; top:-8px; left:{{p.left}}%; width:{{p.size}}px; height:{{p.size}}px; border-radius:50%; background:#e7edf3; opacity:{{p.opacity}}; animation:snowfall {{p.duration}}s linear {{p.delay}}s infinite; pointer-events:none;"></div>
+  </sc-for>
+
+  <!-- scanlines -->
+  <sc-if value="{{showMotion}}" hint-placeholder-val="{{true}}">
+    <div style="position:absolute; inset:0; pointer-events:none; mix-blend-mode:overlay; opacity:0.5; background:repeating-linear-gradient(to bottom, rgba(255,255,255,0.03) 0px, rgba(255,255,255,0.03) 1px, transparent 1px, transparent 4px); animation:scanlineDrift 7s linear infinite;"></div>
+  </sc-if>
+
+  <!-- vignette -->
+  <div style="position:absolute; inset:0; pointer-events:none; background:radial-gradient(ellipse at 50% 45%, transparent 42%, rgba(0,0,0,0.5) 100%);"></div>
+
+  <!-- content -->
+  <div style="position:relative; z-index:2; width:100%; height:100%; box-sizing:border-box; padding:56px 64px; display:flex; flex-direction:column; justify-content:space-between;">
+
+    <!-- top row -->
+    <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+      <sc-if value="{{showMotion}}" hint-placeholder-val="{{true}}">
+        <div style="display:flex; align-items:center; gap:12px;">
+          <div style="display:flex; align-items:flex-end; gap:3px; height:18px;">
+            <div style="width:3px; height:6px; background:{{accentColor}}; animation:signalPulse 1.6s ease-in-out infinite; animation-delay:0s;"></div>
+            <div style="width:3px; height:10px; background:{{accentColor}}; animation:signalPulse 1.6s ease-in-out infinite; animation-delay:0.15s;"></div>
+            <div style="width:3px; height:14px; background:{{accentColor}}; animation:signalPulse 1.6s ease-in-out infinite; animation-delay:0.3s;"></div>
+            <div style="width:3px; height:18px; background:{{accentColor}}; animation:signalPulse 1.6s ease-in-out infinite; animation-delay:0.45s;"></div>
+          </div>
+          <div style="font-family:'IBM Plex Mono', monospace; font-size:11px; letter-spacing:0.12em; color:oklch(65% 0.02 250); text-transform:uppercase;">Signal · {{freqDisplay}}</div>
+        </div>
+      </sc-if>
+
+      <div style="font-family:'IBM Plex Mono', monospace; font-size:12px; letter-spacing:0.05em; color:oklch(60% 0.02 250); text-align:right;">DEV BUILD · 07.2026</div>
+    </div>
+
+    <!-- center title -->
+    <div style="display:flex; flex-direction:column; gap:16px;">
+      <div style="font-family: 'IBM Plex Sans', sans-serif; font-weight: 600; font-size: clamp(56px, 9vw, 132px); line-height: 0.94; letter-spacing: 0.01em; text-transform: uppercase; animation: {{wordmarkAnimation}}; color: #FFFFFFB2">{{titleChoice}}</div>
+      
+    </div>
+
+    <!-- nav -->
+    <div style="display:flex; flex-direction:column; gap:16px;">
+      <sc-for list="{{navItems}}" as="item" hint-placeholder-count="3">
+        <div onClick="{{item.onClick}}" style="display:flex; align-items:center; gap:16px; width:fit-content; min-width:280px; padding:10px 2px; border-bottom:1px solid rgba(255,255,255,0.1); cursor:pointer;" style-hover="border-bottom-color:{{accentColor}};">
+          <div style="font-family:'IBM Plex Mono', monospace; font-size:13px; color:oklch(55% 0.02 250); width:20px;">{{item.index}}</div>
+          <div style="font-family:'IBM Plex Sans', sans-serif; font-size:{{item.fontSize}}; font-weight:{{item.fontWeight}}; letter-spacing:0.08em; text-transform:uppercase; color:oklch(90% 0.01 250);">{{item.label}}</div>
+          <sc-if value="{{item.isPrimary}}" hint-placeholder-val="{{false}}">
+            <div style="display:flex; align-items:center; gap:8px; margin-left:4px;">
+              <div style="width:6px; height:6px; border-radius:50%; background:{{accentColor}}; animation:signalPulse 2s ease-in-out infinite;"></div>
+              <div style="font-family:'IBM Plex Mono', monospace; font-size:10px; letter-spacing:0.15em; color:{{accentColor}}; text-transform:uppercase;">Ready</div>
+            </div>
+          </sc-if>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;titleChoice&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;DEAD AIR&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;options&quot;:[&quot;ACTIUM&quot;,&quot;DEAD AIR&quot;,&quot;SKYWAVE&quot;,&quot;DRIFTLANDS&quot;,&quot;STATIC FRONTIER&quot;],&quot;section&quot;:&quot;Title&quot;},&quot;motionIntensity&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;subtle&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;options&quot;:[&quot;off&quot;,&quot;subtle&quot;,&quot;active&quot;],&quot;section&quot;:&quot;Atmosphere&quot;},&quot;accentColor&quot;:{&quot;editor&quot;:&quot;color&quot;,&quot;default&quot;:&quot;#D9A15B&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;options&quot;:[&quot;#D9A15B&quot;,&quot;#93B7C9&quot;,&quot;#8FA97E&quot;],&quot;section&quot;:&quot;Atmosphere&quot;}}">
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.snowParticles = Array.from({ length: 30 }).map((_, i) => ({
+      id: i,
+      left: Math.random() * 100,
+      size: 2 + Math.random() * 2,
+      opacity: 0.15 + Math.random() * 0.3,
+      duration: 9 + Math.random() * 10,
+      delay: -(Math.random() * 18),
+    }));
+    this.state = { freq: 96.4 };
+  }
+
+  componentDidMount() {
+    this._tick = setInterval(() => {
+      this.setState((s) => {
+        let next = s.freq + (Math.random() - 0.5) * 1.4;
+        if (next < 88) next = 88;
+        if (next > 108) next = 108;
+        return { freq: next };
+      });
+    }, 2200);
+  }
+
+  componentWillUnmount() {
+    clearInterval(this._tick);
+  }
+
+  renderVals() {
+    const intensity = this.props.motionIntensity ?? 'subtle';
+    const accentColor = this.props.accentColor ?? '#D9A15B';
+    const titleChoice = this.props.titleChoice ?? 'ACTIUM';
+    const showMotion = intensity !== 'off';
+    const speedMult = intensity === 'active' ? 0.65 : 1;
+    const opacityMult = intensity === 'active' ? 1.3 : 1;
+
+    const snowParticles = showMotion
+      ? this.snowParticles.map((p) => ({
+          ...p,
+          duration: +(p.duration * speedMult).toFixed(2),
+          opacity: Math.min(0.6, +(p.opacity * opacityMult).toFixed(2)),
+        }))
+      : [];
+
+    const wordmarkAnimation = showMotion && intensity === 'active' ? 'flicker 8s ease-in-out infinite' : 'none';
+
+    const navItems = [
+      { id: 'campaign', index: '01', label: 'Campaign', isPrimary: true, fontSize: '26px', fontWeight: 600, onClick: () => console.log('[launcher] Continue Campaign') },
+      { id: 'quick', index: '02', label: 'Quick Battle', isPrimary: false, fontSize: '20px', fontWeight: 500, onClick: () => console.log('[launcher] Quick Battle') },
+      { id: 'tools', index: '03', label: 'Tools', isPrimary: false, fontSize: '20px', fontWeight: 500, onClick: () => console.log('[launcher] Tools') },
+    ];
+
+    return {
+      titleChoice,
+      accentColor,
+      showMotion,
+      snowParticles,
+      wordmarkAnimation,
+      navItems,
+      freqDisplay: this.state.freq.toFixed(1),
+    };
+  }
+}
+</script>
+</body>
+</html>

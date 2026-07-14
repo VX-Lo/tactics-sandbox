@@ -35,21 +35,30 @@ const fixtureCampaign = (seed: number) => new Campaign(loadWorld(FIXTURE), seed)
 
 // --- pillar 6: the resolveBattle stub & the variance rule ------------------
 
+// Build a BattleRequest for the auto-resolver from bare strengths (the seed is
+// the only field it reads besides the two strengths; faction/terrain are unused).
+const req = (a: number, d: number, seed: number) => ({
+  attacker: { faction: 'attacker', strength: a },
+  defender: { faction: 'defender', strength: d },
+  terrainSeed: 0,
+  seed,
+})
+
 describe('resolveBattle stub — the variance rule', () => {
   it('the stronger side ALWAYS wins; the seed never decides a non-tie', () => {
     for (let seed = 0; seed < 300; seed++) {
-      expect(autoResolve({ strength: 10 }, { strength: 6 }, seed).winner).toBe('attacker')
-      expect(autoResolve({ strength: 4 }, { strength: 9 }, seed).winner).toBe('defender')
+      expect(autoResolve(req(10, 6, seed)).winner).toBe('attacker')
+      expect(autoResolve(req(4, 9, seed)).winner).toBe('defender')
     }
   })
 
   it('the seed varies only the MARGIN (victor casualties), never the winner', () => {
     const deltas = new Set<number>()
-    for (let seed = 0; seed < 50; seed++) deltas.add(autoResolve({ strength: 10 }, { strength: 8 }, seed).attackerDelta)
+    for (let seed = 0; seed < 50; seed++) deltas.add(autoResolve(req(10, 8, seed)).attackerDelta)
     expect(deltas.size).toBeGreaterThan(1) // casualties differ across seeds
     // Victor always survives (>= 1); the loser is fully spent.
     for (let seed = 0; seed < 50; seed++) {
-      const o = autoResolve({ strength: 10 }, { strength: 6 }, seed)
+      const o = autoResolve(req(10, 6, seed))
       expect(10 + o.attackerDelta).toBeGreaterThanOrEqual(1)
       expect(o.defenderDelta).toBe(-6)
     }
@@ -57,7 +66,7 @@ describe('resolveBattle stub — the variance rule', () => {
 
   it('equal strength is the ONLY case the seed may decide the winner', () => {
     const winners = new Set<string>()
-    for (let seed = 0; seed < 100; seed++) winners.add(autoResolve({ strength: 7 }, { strength: 7 }, seed).winner)
+    for (let seed = 0; seed < 100; seed++) winners.add(autoResolve(req(7, 7, seed)).winner)
     expect(winners).toEqual(new Set(['attacker', 'defender'])) // both outcomes occur
   })
 })

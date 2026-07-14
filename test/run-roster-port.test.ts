@@ -31,7 +31,7 @@ describe('run-layer RosterPort adapter — real binding to live run state', () =
 
     expect(port.factions()).toEqual(['player'])
     const units = port.units('player')
-    expect(units).toEqual(run.roster.map((e) => ({ id: e.unit.id, tier: e.unit.tier })))
+    expect(units).toEqual(run.roster.map((e) => ({ id: e.unit.id, tier: e.unit.tier, name: e.unit.name })))
     // The default elf roster is all `named` — read from the real Unit objects.
     expect(units.every((u) => u.tier === 'named')).toBe(true)
     // A run represents one faction; any other faction reports an empty roster.
@@ -71,7 +71,12 @@ describe('run-layer RosterPort adapter — real binding to live run state', () =
     const runBacked = makeRunRosterPort('player', {
       roster: [{ unit: instantiateUnit(runContent, 'skeleton', 'a'), xp: 0, level: 1 }],
     })
-    expect(inMem.units('player')).toEqual([{ id: 'a', tier: 'levy' }])
-    expect(runBacked.units('player')).toEqual([{ id: 'a', tier: 'levy' }])
+    // Same id/tier shape from both; `name` is run-owned, so the run-backed port
+    // reports the real Unit's name while the in-memory seed defaults it to the id.
+    const shape = (u: { id: string; tier: string }) => ({ id: u.id, tier: u.tier })
+    expect(inMem.units('player').map(shape)).toEqual([{ id: 'a', tier: 'levy' }])
+    expect(runBacked.units('player').map(shape)).toEqual([{ id: 'a', tier: 'levy' }])
+    expect(typeof inMem.units('player')[0].name).toBe('string')
+    expect(typeof runBacked.units('player')[0].name).toBe('string')
   })
 })

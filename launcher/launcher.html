@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- title not final — see README -->
+    <title>Launcher</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./launcher.css" />
+  </head>
+  <body>
+    <div class="launcher" data-hook="launcher-root">
+      <!-- decorative background layers, no behavior -->
+      <div class="launcher-backdrop" aria-hidden="true">
+        <div class="launcher-island launcher-island--a"></div>
+        <div class="launcher-island launcher-island--b"></div>
+        <div class="launcher-ridge launcher-ridge--far"></div>
+        <div class="launcher-ridge launcher-ridge--near"></div>
+        <div class="launcher-snowfield" data-hook="snowfield"></div>
+        <div class="launcher-scanlines"></div>
+        <div class="launcher-vignette"></div>
+      </div>
+
+      <div class="launcher-content">
+        <header class="launcher-topbar">
+          <!-- cosmetic only — ticked by launcher.js, see README -->
+          <div class="launcher-signal" data-hook="signal-readout">
+            <div class="launcher-signal-bars" aria-hidden="true">
+              <span></span><span></span><span></span><span></span>
+            </div>
+            <span class="launcher-signal-label">Signal &middot; <span data-hook="freq-value">96.4</span></span>
+          </div>
+          <div class="launcher-build-tag">DEV BUILD &middot; 07.2026</div>
+        </header>
+
+        <div class="launcher-title-block">
+          <!-- text only, no logic attached — see README for title candidates -->
+          <h1 class="launcher-wordmark" data-hook="wordmark">Dead Air</h1>
+        </div>
+
+        <nav class="launcher-nav" aria-label="Main menu">
+          <!-- intent: enter Campaign (campaign.html) — no handler wired yet -->
+          <button class="launcher-nav-item launcher-nav-item--primary" data-hook="nav-campaign">
+            <span class="launcher-nav-index">01</span>
+            <span class="launcher-nav-label">Campaign</span>
+            <span class="launcher-nav-ready" aria-hidden="true"><span class="launcher-nav-led"></span>Ready</span>
+          </button>
+          <!-- intent: enter single-skirmish sandbox (battle.html) — no handler wired yet -->
+          <button class="launcher-nav-item" data-hook="nav-quick-battle">
+            <span class="launcher-nav-index">02</span>
+            <span class="launcher-nav-label">Quick Battle</span>
+          </button>
+          <!-- intent: TBD, no tools screen exists yet — leave disabled/no-op until one does -->
+          <button class="launcher-nav-item" data-hook="nav-tools">
+            <span class="launcher-nav-index">03</span>
+            <span class="launcher-nav-label">Tools</span>
+          </button>
+        </nav>
+      </div>
+    </div>
+    <script type="module" src="./launcher.js"></script>
+  </body>
+</html>

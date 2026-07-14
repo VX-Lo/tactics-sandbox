@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- title not final — working title; see launcher/README.md for candidates -->
+    <title>Dead Air</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <!--
+      ============================================================
+      SHELL<->GAME CONTRACT (human-enforced boundary — keep legible)
+      ============================================================
+      This is the WIRED, live launcher — the front door before the game boots.
+      It is the port of Aya's design reference in launcher/ (launcher.html/css/js);
+      that directory stays as her untouched source (she hand-copies updates there).
+      When Aya revises the shell, re-copy the markup here and the CSS to
+      src/ui/launcher.css, preserving the data-hook names below.
+
+      LOAD-BEARING HOOKS — the controller (src/ui/launcher-main.ts) queries ONLY
+      these `data-hook` attributes. Style freely, rename classes at will, but do
+      NOT rename these or the navigation breaks:
+        data-hook="nav-campaign"     -> routes to campaign.html
+        data-hook="nav-quick-battle" -> routes to battle.html
+        data-hook="nav-tools"        -> disabled no-op (no tools screen yet)
+        data-hook="snowfield"        -> decorative particle container (cosmetic)
+        data-hook="freq-value"       -> cosmetic frequency readout (cosmetic)
+        data-hook="wordmark"         -> title text only, no behavior
+
+      ROUTING DECISION (was launcher/README's open question): the launcher is the
+      front door; Campaign -> campaign.html, Quick Battle -> battle.html. index.html
+      (the older full-Run screen) stays reachable directly but is NOT surfaced here.
+      The game is entered through these page links today; when the boot flow is
+      reworked, the campaign entry is expected to narrow to a single documented
+      "start a campaign" call — keep this shell agnostic to how the game boots.
+    -->
+    <div class="launcher" data-hook="launcher-root">
+      <!-- decorative background layers, no behavior -->
+      <div class="launcher-backdrop" aria-hidden="true">
+        <div class="launcher-island launcher-island--a"></div>
+        <div class="launcher-island launcher-island--b"></div>
+        <div class="launcher-ridge launcher-ridge--far"></div>
+        <div class="launcher-ridge launcher-ridge--near"></div>
+        <div class="launcher-snowfield" data-hook="snowfield"></div>
+        <div class="launcher-scanlines"></div>
+        <div class="launcher-vignette"></div>
+      </div>
+
+      <div class="launcher-content">
+        <header class="launcher-topbar">
+          <!-- cosmetic only — ticked by launcher-main.ts -->
+          <div class="launcher-signal" data-hook="signal-readout">
+            <div class="launcher-signal-bars" aria-hidden="true">
+              <span></span><span></span><span></span><span></span>
+            </div>
+            <span class="launcher-signal-label">Signal &middot; <span data-hook="freq-value">96.4</span></span>
+          </div>
+          <div class="launcher-build-tag">DEV BUILD &middot; 07.2026</div>
+        </header>
+
+        <div class="launcher-title-block">
+          <!-- text only, no logic attached -->
+          <h1 class="launcher-wordmark" data-hook="wordmark">Dead Air</h1>
+        </div>
+
+        <nav class="launcher-nav" aria-label="Main menu">
+          <!-- enter Campaign (campaign.html) -->
+          <button class="launcher-nav-item launcher-nav-item--primary" data-hook="nav-campaign">
+            <span class="launcher-nav-index">01</span>
+            <span class="launcher-nav-label">Campaign</span>
+            <span class="launcher-nav-ready" aria-hidden="true"><span class="launcher-nav-led"></span>Ready</span>
+          </button>
+          <!-- enter single-skirmish sandbox (battle.html) -->
+          <button class="launcher-nav-item" data-hook="nav-quick-battle">
+            <span class="launcher-nav-index">02</span>
+            <span class="launcher-nav-label">Quick Battle</span>
+          </button>
+          <!-- TBD, no tools screen exists yet — disabled no-op until one does -->
+          <button class="launcher-nav-item" data-hook="nav-tools" disabled>
+            <span class="launcher-nav-index">03</span>
+            <span class="launcher-nav-label">Tools</span>
+          </button>
+        </nav>
+      </div>
+    </div>
+    <script type="module" src="/src/ui/launcher-main.ts"></script>
+  </body>
+</html>

@@ -6,8 +6,11 @@ import { defineConfig } from 'vitest/config'
 export default defineConfig({
   build: {
     rollupOptions: {
-      // Two entry pages: the full run (index) and the single-battle sandbox.
+      // Entry pages. launcher = the front door (Aya's presentation shell);
+      // main = the full run; battle = the single-skirmish sandbox; campaign =
+      // the strategic map. The launcher routes to campaign.html / battle.html.
       input: {
+        launcher: 'launcher.html',
         main: 'index.html',
         battle: 'battle.html',
         campaign: 'campaign.html',

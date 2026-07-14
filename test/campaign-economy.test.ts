@@ -248,8 +248,10 @@ describe('economy — RosterPort contract (in-memory implementation)', () => {
       { faction: 'player', units: [{ id: 'u1', tier: 'supporting' }] },
     ])
     expect(port.factions()).toEqual(['player'])
-    // Only run-owned truth crosses the boundary — no mia/debt fields on the port.
-    expect(port.units('player')).toEqual([{ id: 'u1', tier: 'supporting' }])
+    // Only run-owned truth crosses the boundary — id, tier, and name (identity),
+    // but NO mia/debt fields (those are campaign-side ledger bookkeeping). Name
+    // defaults to the id when the seed doesn't carry one.
+    expect(port.units('player')).toEqual([{ id: 'u1', tier: 'supporting', name: 'u1' }])
 
     port.removeUnit('player', 'u1') // the one mutation the port allows (permadeath)
     expect(port.units('player')).toEqual([])

@@ -70,29 +70,14 @@ export interface Party {
   strength: number
 }
 
-// --- the conflict resolver: pillar 6, the combat socket (STUBBED) ----------
-
-/** A force entering a battle. Deliberately minimal — the socket knows nothing of
- *  units, terrain, or the tactics engine. */
-export interface BattleParty {
-  strength: number
-}
-
-export interface BattleOutcome {
-  winner: 'attacker' | 'defender'
-  /** Strength change for each side (<= 0 casualties). The caller applies these:
-   *  the defeated party is removed; the weakened victor persists. */
-  attackerDelta: number
-  defenderDelta: number
-}
-
-/**
- * The SINGLE interface between campaign and combat. The auto-resolver stub
- * implements it now; the real tactics engine will implement the SAME signature
- * and the SAME contract later (see resolve.ts for the variance rule). The
- * campaign never learns which implementation it holds.
- */
-export type ResolveBattle = (attacker: BattleParty, defender: BattleParty, seed: number) => BattleOutcome
+// --- the conflict resolver: pillar 6, the combat socket --------------------
+// The contract itself now lives in the layer-neutral contracts module
+// (src/contracts/battle.ts) so BOTH the campaign (caller) and a run-layer
+// resolver (implementer) can depend on it without a cross-layer import. Two
+// resolvers satisfy it: the aggregate auto-resolver (resolve.ts) and the real
+// hand-fight resolver (src/run/battle-resolver.ts). Re-exported here so campaign
+// code keeps a single import surface.
+export type { ForceHandle, BattleRequest, BattleResult, ResolveBattle } from '../contracts/battle'
 
 // --- the loop --------------------------------------------------------------
 

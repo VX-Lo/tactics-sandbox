@@ -32,7 +32,7 @@ export function makeRunRosterPort(faction: string, handle: RunRosterHandle): Ros
   return {
     factions: () => [faction],
     units: (f) =>
-      f === faction ? handle.roster.map((e) => ({ id: e.unit.id, tier: e.unit.tier })) : [],
+      f === faction ? handle.roster.map((e) => ({ id: e.unit.id, tier: e.unit.tier, name: e.unit.name })) : [],
     removeUnit: (f, unitId) => {
       if (f !== faction) return
       handle.roster = handle.roster.filter((e) => e.unit.id !== unitId)

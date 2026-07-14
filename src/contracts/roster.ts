@@ -31,10 +31,21 @@
  */
 export type RosterTier = 'levy' | 'supporting' | 'named'
 
-/** The run layer's authoritative view of one roster unit: identity + tier only. */
+/**
+ * The run layer's authoritative view of one roster unit: identity + tier. `name`
+ * is run-owned, read-only identity, exactly like `tier` — the campaign reads it,
+ * never writes it. It is here so the campaign can name battle casualties it learns
+ * by DIFFING this roster before/after a fight (a unit that went in and didn't come
+ * back), which is the ONLY channel by which campaign learns named-unit facts —
+ * they never ride on a BattleResult (see contracts/battle.ts). Future party-facing
+ * beats (desertion, morale, companion arcs) flow through this same read/command
+ * seam: campaign expresses intent, run executes; campaign never writes unit truth.
+ */
 export interface RosterUnitRef {
   id: string
   tier: RosterTier
+  /** Run-owned display name (a levy's placeholder, or a named unit's earned name). */
+  name: string
 }
 
 /**

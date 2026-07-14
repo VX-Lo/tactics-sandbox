@@ -100,7 +100,9 @@ export function makeUpkeepLedger(): UpkeepLedger {
 
 export interface RosterSeed {
   faction: Owner
-  units: Array<{ id: string; tier: RosterTier }>
+  /** `name` is optional in seed data — it defaults to the id (a levy has no
+   *  earned name to speak of); the port always reports a concrete name. */
+  units: Array<{ id: string; tier: RosterTier; name?: string }>
 }
 
 /**
@@ -112,7 +114,7 @@ export interface RosterSeed {
  */
 export function makeInMemoryRosterPort(seeds: RosterSeed[]): RosterPort {
   const rosters = new Map<Owner, RosterUnitRef[]>(
-    seeds.map((s) => [s.faction, s.units.map((u) => ({ id: u.id, tier: u.tier }))]),
+    seeds.map((s) => [s.faction, s.units.map((u) => ({ id: u.id, tier: u.tier, name: u.name ?? u.id }))]),
   )
   return {
     factions: () => [...rosters.keys()],

@@ -61,22 +61,68 @@ These are the few things that are expensive to get wrong. Guard them.
   1. TACTICS ENGINE — the deterministic battle grid (units, movement, attacks).
   2. RUN LAYER — XP, permadeath, deployment, promotion, recovery, names.
   3. CAMPAIGN LAYER — the strategic world map (nodes, ownership, agents, time).
-- The campaign layer imports NOTHING from tactics internals. Their ONLY connection is
-  the resolveBattle seam (section 3).
+- The campaign layer imports NOTHING from tactics internals. Their ONLY connections
+  are two layer-neutral CONTRACTS in src/contracts/ (which import nothing from any
+  layer): battle.ts (the resolveBattle socket, section 3) and roster.ts (the
+  RosterPort, section 7). Both sides depend on the contract, never on each other.
+- A FOURTH layer sits ABOVE all three: the presentation SHELL (launcher/start
+  screens), owned by a visual-design agent (Aya). It hands off to the game through
+  plain page routing today and, eventually, one narrow "start a campaign" entry —
+  keep the game agnostic to how it boots. The shell<->game boundary is HUMAN-
+  enforced (Aya hand-copies files; can't run tests), so it must stay legible in the
+  files: commented contract blocks name the load-bearing hooks. See section 7.
 - Changing a module boundary or a cross-layer interface is an OPUS-level change.
 
 ============================================================
 ## 3. resolveBattle — THE SOCKET (most important seam in the project)
 ============================================================
-- Signature: resolveBattle(attacker, defender, seed) -> outcome
-  (outcome returns at minimum: winner, and strength/casualty deltas for each side).
-- This is the ONLY interface between the campaign layer and combat.
-- CURRENTLY a deterministic PLACEHOLDER auto-resolver. It MUST honor the variance rule:
-  the STRONGER force always wins; the seed decides only the MARGIN (losses on each side),
-  never the winner. Equal strength is the sole case the seed may decide.
-- The real tactics engine will LATER implement this same interface under the same
-  contract. Wiring it in is a separate, dedicated (Opus) session. Until then, treat the
-  placeholder like the strategic layer's "heal-to-full" stand-in: fine to build on.
+- THE CONTRACT NOW LIVES IN src/contracts/battle.ts (layer-neutral, mirroring
+  contracts/roster.ts) so BOTH sides depend on it without a cross-layer import:
+  the campaign CALLS it, a resolver IMPLEMENTS it, they meet only there.
+- Signature: resolveBattle(request: BattleRequest) -> BattleResult.
+    * BattleRequest = { attacker, defender: ForceHandle; terrainSeed; seed }.
+      A ForceHandle is OPAQUE: { faction, strength } — WHICH force and its
+      aggregate strength, never unit internals. terrainSeed is stable per node.
+    * BattleResult is STRICTLY AGGREGATE: { winner, attackerDelta, defenderDelta }.
+      NO unit-level detail — because auto-resolve is aggregate math that never
+      simulates units; a named-casualty field would force it to fabricate. The
+      campaign applies deltas identically regardless of which resolver answered.
+- TWO-PATH MODEL (scaling-blend made mechanical, 1c): resolveBattle is not
+  replaced or enriched — it is ONE of TWO resolvers satisfying this SAME contract:
+    * AUTO-RESOLVE (src/campaign/resolve.ts, autoResolve): fast, headless,
+      aggregate. Variance rule: STRONGER force always wins; seed decides only the
+      MARGIN; equal strength is the sole seed-decided winner. For rival-vs-rival,
+      delegated fights, and the overnight sim.
+    * HAND-FIGHT (src/run/battle-resolver.ts, makeBattleResolveBattle): a REAL
+      tactics battle (injects the party's units into Battle, drives it via the
+      engine AI's autoPlay, returns an honest aggregate). Winner comes from PLAY —
+      variance-rule-legal because hand-fighting IS choosing to expose yourself.
+      Assembled from existing seams (Battle.playerUnits + ai.autoPlay); it does
+      NOT apply XP/promotion/roster-culling — that stays Run.finishBattle's job.
+  Injected via CampaignOptions.resolveBattle (default autoResolve), exactly like
+  rosterPort. Auto-vs-hand is a RECORDED player choice; both paths replay
+  byte-identically from seed + choices.
+- UNIT-TRUTH STAYS IN THE RUN LAYER. Given an aggregate result, WHICH specific
+  units fall/level/wound is run-layer logic the run already owns (wounds, death,
+  XP, promotion via event-bus observation). The battle reports aggregate; RUN
+  applies unit consequences. Do NOT move casualty-selection into resolver/campaign.
+- NAMED CASUALTIES reach the campaign by DIFFING the roster through the port, never
+  from the result: campaign snapshots port.units(faction) as it builds the request,
+  then reads back after and diffs (went in, didn't return -> casualty). The port
+  read was extended {id,tier} -> {id,tier,name} (name is run-owned read-only
+  identity, same boundary as tier). campaign.ts's fallenNamed() + log.ts's
+  battle-casualty event carry it. This same "campaign expresses intent / reads
+  run-owned facts, run executes" pattern is the channel ALL future party beats
+  (desertion, morale, companion arcs) must use — establish the habit here.
+- DEFERRED (open, needs a determinism-safe answer when built): how AUTO-RESOLVE
+  maps an aggregate loss ("-40% strength") to WHICH specific units fall. Resolver-
+  internal, not built this pass. Until then the auto path applies no unit
+  consequences, so the named-casualty diff is a live no-op on auto captures (it
+  goes live on the hand path, which mutates real units). The hand resolver also
+  has provisional internals flagged in-file: garrison composition from a defense
+  scalar, the strength<->units calibration, and node-stable terrain from
+  terrainSeed (currently the battle seed drives the map; a distinct map seed is a
+  future additive BattleOptions field — no engine change was needed this pass).
 
 ============================================================
 ## 4. CORE SYSTEM VOCABULARY
@@ -175,6 +221,23 @@ Believed shipped:
   move-after-attack, attackBudget default 1).
 - Strategic skeleton (campaign module: node-graph world, settlement ownership,
   one roaming rival, resolveBattle placeholder honoring the variance rule).
+- Campaign<->battle CONTRACT + two-path model (SHIPPED — this pass, section 3).
+  BattleRequest/BattleResult (aggregate-only) live in src/contracts/battle.ts;
+  autoResolve reshaped to speak it; makeBattleResolveBattle (src/run/battle-resolver.ts)
+  is the real hand-fight path via Battle+autoPlay. Port read extended to carry `name`;
+  campaign learns named casualties by diffing the port (fallenNamed + battle-casualty
+  log event), never from the result. Tested: test/battle-contract.test.ts (both paths
+  round-trip, determinism per path, named-casualty diff, narrow-port). Resolver
+  internals (auto casualty-selection; hand garrison/calibration/terrain) deferred —
+  section 3.
+- Presentation SHELL, first wiring (Aya's launcher). launcher.html (root Vite entry,
+  registered in vite.config.ts) + src/ui/launcher-main.ts + src/ui/launcher.css are the
+  LIVE, wired port of Aya's design reference in launcher/ (kept untouched as her source;
+  she hand-copies revisions there). Front door: Campaign -> campaign.html, Quick Battle
+  -> battle.html, Tools disabled (no screen yet). index.html (older full-Run) stays
+  reachable but unsurfaced. Load-bearing data-hook names are documented in a contract
+  block inside launcher.html — keep them stable across restyles. Cosmetic Math.random
+  (snow/signal) is the accepted UI-only-randomness exception; never touches the sim.
 - Unit inspection panel (read-only).
 - Campaign economy (src/campaign/economy.ts): Scrip/Stores accumulation, flat
   per-node income with seeded jitter, roster upkeep with tiered failure, capture-cost
@@ -228,10 +291,16 @@ In flight / uncertain — VERIFY against repo before building on:
 - Intra-unit undo (commit-on-reveal) — SHIPPED (battle.ts activation/undo/canUndo,
   commitment.ts, test/undo.test.ts). No longer uncertain.
 - Random-seed-recorded-to-state — confirm implemented.
-- NOTE (pre-existing, out of scope this pass): test/combat.test.ts has 3 failing
-  tests in resolveCombat sequencing (counters/doubles/miss damage). They predate and
-  are unrelated to this pass (combat.ts was not in the audited batch). Not a
-  determinism/boundary issue — a combat-resolution bug for a future combat pass.
+- COMBAT.TS GATING QUESTION — RESOLVED (asked twice; here is the answer). The 3
+  "failing" resolveCombat tests were NOT combat.ts bugs: combat sequencing
+  (counter/double/kill-ends-exchange/miss ordering) is CORRECT. The tests hardcoded
+  skeleton maxHp=20 while data/units.json defines it as 12; only the absolute-HP
+  assertions failed (the blow-order assertions all passed). Fixed by pinning
+  skel.hp=20 in those tests (now data-independent, like the sibling test that sets
+  skel.hp=5). Suite fully green. GATING VERDICT: these cannot flip a WINNER — there
+  was no bug — so combat.ts does NOT gate hand-fight on a variance-rule violation.
+  combat.ts is clear to carry hand-fight; its variance (miss/crit) is margin, not a
+  fight-deciding coin-flip the player didn't choose.
 
 ============================================================
 ## 8. DEFERRED — see cool_ideas.txt

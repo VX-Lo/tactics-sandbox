@@ -5,8 +5,10 @@
 // own, independent of Campaign/DOM. Rendering (the actual HTML/CSS) stays in
 // campaign-view.ts; this file stops at "record" and "display string."
 //
-// No unit names/ids appear anywhere here — upkeep failures and MIA returns are
-// generic-by-tier, matching the run layer's own no-names-for-levies stance.
+// Upkeep failures and MIA returns are generic-by-tier (no ids/names), matching
+// the run layer's own no-names-for-levies stance. The ONE exception is a battle
+// casualty: the campaign legitimately learns a fallen unit's NAME by diffing the
+// roster through the port (see roster.ts / campaign.ts), so that event carries it.
 
 import type { EconomyTier, UpkeepFailure } from './economy'
 import type { NodeId, Owner } from './types'
@@ -19,6 +21,7 @@ export type CampaignLogEvent =
   | { kind: 'upkeep-mia'; faction: Owner }
   | { kind: 'upkeep-debt'; faction: Owner }
   | { kind: 'mia-return'; faction: Owner }
+  | { kind: 'battle-casualty'; faction: Owner; name: string }
   | { kind: 'rival-hold'; faction: Owner }
   | { kind: 'rival-expand'; faction: Owner }
 
@@ -36,6 +39,13 @@ export function upkeepFailureEvents(faction: Owner, failures: UpkeepFailure[]): 
 /** One event per unit that rejoined the roster from MIA this tick. */
 export function miaReturnEvents(faction: Owner, miaReturned: string[]): CampaignLogEvent[] {
   return miaReturned.map(() => ({ kind: 'mia-return', faction }))
+}
+
+/** One event per NAMED unit that went into a battle and did not return — learned
+ *  by diffing the roster through the port, the only channel for named-unit facts
+ *  (levies fall generically via upkeep; a battle death of a name is mourned). */
+export function battleCasualtyEvents(faction: Owner, fallenNames: string[]): CampaignLogEvent[] {
+  return fallenNames.map((name) => ({ kind: 'battle-casualty', faction, name }))
 }
 
 export function captureWonEvent(faction: Owner, node: NodeId, strength: number): CampaignLogEvent {
@@ -87,6 +97,8 @@ export function describeCampaignLogEvent(e: CampaignLogEvent, ctx: LogEventConte
       return `${who} cannot feed a named unit — the debt grows.`
     case 'mia-return':
       return `A missing unit rejoins ${who}'s roster.`
+    case 'battle-casualty':
+      return `${e.name} fell in battle under ${who}'s banner.`
     case 'rival-hold':
       return `${who} holds its coffers, weighing the next move.`
     case 'rival-expand':
